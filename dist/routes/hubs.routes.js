@@ -4,6 +4,8 @@ const express_1 = require("express");
 const hubs_controller_1 = require("../controllers/hubs.controller");
 const auth_1 = require("../utils/auth");
 const router = (0, express_1.Router)();
+// Interna (orders-service): contador de pedidos del hub
+router.patch("/internal/:hubId/usage/increment-order", hubs_controller_1.incrementHubOrderUsage);
 // Pública: resolución de {slug}.ordena.app para middleware/storefront
 router.get("/resolve", hubs_controller_1.resolveHubBySlug);
 // Protegidas

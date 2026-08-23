@@ -64,9 +64,12 @@ function getBusinessById(businessId) {
  */
 function assertBusinessBelongsToHub(hubId, businessId) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c;
+        var _a, _b, _c, _d, _e;
         const resp = yield getBusinessById(businessId);
-        const business = (_c = (_b = (_a = resp === null || resp === void 0 ? void 0 : resp.data) === null || _a === void 0 ? void 0 : _a.business) !== null && _b !== void 0 ? _b : resp === null || resp === void 0 ? void 0 : resp.data) !== null && _c !== void 0 ? _c : null;
+        // GET /business/:id devuelve el negocio SIN wrapper ({_id, name, hubId...});
+        // toleramos también shapes envueltos por si el upstream cambia.
+        const raw = (_e = (_d = (_c = (_b = (_a = resp === null || resp === void 0 ? void 0 : resp.data) === null || _a === void 0 ? void 0 : _a.business) !== null && _b !== void 0 ? _b : resp === null || resp === void 0 ? void 0 : resp.business) !== null && _c !== void 0 ? _c : resp === null || resp === void 0 ? void 0 : resp.data) !== null && _d !== void 0 ? _d : resp) !== null && _e !== void 0 ? _e : null;
+        const business = raw && raw._id ? raw : null;
         const businessHubId = (business === null || business === void 0 ? void 0 : business.hubId) ? String(business.hubId) : null;
         if (!business || businessHubId !== String(hubId)) {
             const err = new Error("business_not_in_hub");

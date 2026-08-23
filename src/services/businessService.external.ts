@@ -71,7 +71,10 @@ export async function getBusinessById(businessId: string) {
  */
 export async function assertBusinessBelongsToHub(hubId: string, businessId: string): Promise<any> {
     const resp = await getBusinessById(businessId);
-    const business = resp?.data?.business ?? resp?.data ?? null;
+    // GET /business/:id devuelve el negocio SIN wrapper ({_id, name, hubId...});
+    // toleramos también shapes envueltos por si el upstream cambia.
+    const raw = resp?.data?.business ?? resp?.business ?? resp?.data ?? resp ?? null;
+    const business = raw && raw._id ? raw : null;
     const businessHubId = business?.hubId ? String(business.hubId) : null;
     if (!business || businessHubId !== String(hubId)) {
         const err: any = new Error("business_not_in_hub");

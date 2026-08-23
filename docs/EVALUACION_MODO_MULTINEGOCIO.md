@@ -152,10 +152,11 @@ Dos ajustes: (a) URL por subdominio en lugar de path (misma autonomía, cero col
 - ✅ Horarios overnight + doble turno (business + frontend) — **hecho**
 - ✅ Bloqueo de venta fuera de horario (`allowSalesOutsideHours`) — **hecho**
 - ✅ Scaffold `ordenaapp-hubs`: entity, auth JWT + roles, onboarding self-serve, CRUD usuarios, categorías globales, gestión de negocios (contrato definido) — **hecho**
-- ⬜ business-service: `context HUB_MANAGED` + `POST /business/hub-managed` + `GET /businesses/hub/:hubId` + resolver planFeatures + `operationalStatus`
-- ⬜ orders: `hub_id` + endpoint by-hub + notificación WhatsApp al hub + increment de uso del hub
-- ⬜ products: `hubCategoryIds` + búsqueda scoped por hub
-- ⬜ gateway: proxy `/api/hubs` + `/api/hub-users` públicos
+- ✅ business-service: `context HUB_MANAGED` + `POST /business/hub-managed` (hubSlug único por hub, store_link namespaceado, email sintetizado, settings con venta-fuera-de-horario bloqueada) + `GET /businesses/hub/:hubId` + tercera rama del resolver planFeatures + `operationalStatus` (active/paused/temporarily_closed, editable vía `PATCH /business/:id/internal`) — **hecho**
+- ✅ orders: `order.hub_id` (índice parcial) + increment de uso del hub (creación y liberación de held_by_limit) + `GET /internal/hub/:hubId/orders` (paginado, filtros business/status/fechas) — **hecho**
+- ✅ products: `product.hubCategoryIds` (indexado) + `GET /products/hub/:hubId` (búsqueda pública scoped: name, categoría global, negocio, precios; cada producto identifica su negocio) + tagging interno de categorías — **hecho**
+- ✅ gateway: proxy `HUBS_SERVICE_URL` (:3013), `/api/hubs` y `/api/hub-users` públicos con bypass de Firebase (JWT propio), búsqueda de productos del hub pública — **hecho**
+- ⬜ Notificación WhatsApp al hub en cada pedido (requiere definir plantilla Meta del hub — F2)
 
 ### F2 — Experiencia (MVP comercial junto a F1)
 - ⬜ Middleware frontend: wildcard `{slug}.ordena.app` → storefront hub

@@ -15,8 +15,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveHubBySlug = resolveHubBySlug;
 exports.getMyHub = getMyHub;
 exports.updateMyHub = updateMyHub;
+exports.incrementHubOrderUsage = incrementHubOrderUsage;
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const hubCategoryModel_1 = __importDefault(require("../models/hubCategoryModel"));
+const config_1 = require("../config/config");
 /**
  * GET /api/hubs/resolve?slug=oe-ya
  * PÚBLICO — lo consumen el middleware del frontend y el storefront del hub
@@ -141,6 +143,88 @@ function updateMyHub(req, res) {
         }
         catch (error) {
             console.error("Error actualizando hub:", error);
+            return res.status(500).json({
+                status: false,
+                statusCode: 500,
+                message: "Error interno del servidor",
+                data: { error: error instanceof Error ? error.message : error },
+            });
+        }
+    });
+}
+// ────────────────────────────────────────────────────────────────────────────
+// Interno server-to-server (orders-service): contador de pedidos del hub.
+// Guardado por INTERNAL_SHARED_SECRET (header x-ordena-secret; compat: si la
+// env no está configurada, se acepta sin header — mismo patrón del bot).
+// ────────────────────────────────────────────────────────────────────────────
+function isValidInternalCall(req) {
+    if (!config_1.INTERNAL_SHARED_SECRET)
+        return true;
+    const header = (req.headers["x-ordena-secret"] || req.headers["X-Ordena-Secret"]);
+    return header === config_1.INTERNAL_SHARED_SECRET;
+}
+/**
+ * PATCH /api/hubs/internal/:hubId/usage/increment-order
+ * Lo llama orders-service cuando se crea un pedido con hub_id (best-effort).
+ * Rota las métricas si cambió el mes (UTC, idempotente) y luego incrementa.
+ * Devuelve isExtra=true cuando el pedido supera ordersPerMonth del plan.
+ */
+function incrementHubOrderUsage(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c, _d;
+        try {
+            if (!isValidInternalCall(req)) {
+                return res.status(403).json({
+                    status: false,
+                    statusCode: 403,
+                    message: "Llamada interna no autorizada",
+                    data: {},
+                });
+            }
+            const hubId = String(req.params.hubId);
+            const hub = yield hubModel_1.default.findById(hubId);
+            if (!hub) {
+                return res.status(404).json({
+                    status: false,
+                    statusCode: 404,
+                    message: "Hub no encontrado",
+                    data: {},
+                });
+            }
+            // Rotación mensual (UTC) — idéntico patrón al usageMetrics de business.
+            const now = new Date();
+            const last = hub.usageMetrics.lastRotatedAt ? new Date(hub.usageMetrics.lastRotatedAt) : null;
+            const sameMonth = !!last &&
+                last.getUTCFullYear() === now.getUTCFullYear() &&
+                last.getUTCMonth() === now.getUTCMonth();
+            let rotated = false;
+            if (!sameMonth) {
+                yield hubModel_1.default.updateOne({ _id: hubId }, {
+                    $set: {
+                        "usageMetrics.ordersPreviousMonth": hub.usageMetrics.ordersCurrentMonth || 0,
+                        "usageMetrics.ordersCurrentMonth": 0,
+                        "usageMetrics.extraOrdersCurrentMonth": 0,
+                        "usageMetrics.lastRotatedAt": now,
+                    },
+                });
+                rotated = true;
+            }
+            const limit = (_c = (_b = (_a = hub.subscription) === null || _a === void 0 ? void 0 : _a.limits) === null || _b === void 0 ? void 0 : _b.ordersPerMonth) !== null && _c !== void 0 ? _c : -1;
+            const updated = yield hubModel_1.default.findByIdAndUpdate(hubId, { $inc: { "usageMetrics.ordersCurrentMonth": 1 }, $set: { updated_at: now } }, { new: true });
+            const current = (_d = updated === null || updated === void 0 ? void 0 : updated.usageMetrics.ordersCurrentMonth) !== null && _d !== void 0 ? _d : 0;
+            const isExtra = limit !== -1 && current > limit;
+            if (isExtra) {
+                yield hubModel_1.default.updateOne({ _id: hubId }, { $inc: { "usageMetrics.extraOrdersCurrentMonth": 1 } });
+            }
+            return res.status(200).json({
+                status: true,
+                statusCode: 200,
+                message: "Uso incrementado",
+                data: { ordersCurrentMonth: current, isExtra, rotated },
+            });
+        }
+        catch (error) {
+            console.error("Error incrementando uso del hub:", error);
             return res.status(500).json({
                 status: false,
                 statusCode: 500,
