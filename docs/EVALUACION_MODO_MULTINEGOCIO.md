@@ -163,7 +163,7 @@ Dos ajustes: (a) URL por subdominio en lugar de path (misma autonomía, cero col
 - ✅ Storefront hub: home con branding, búsqueda transversal (debounce + query compartible), categorías globales, grid de productos con negocio/estado, directorio con Abierto/Cerrado/Pausado. Página de negocio/carrito/checkout = reuso 100% del storefront existente — **hecho**
 - ✅ Checkout con `hub_id` (cookie) — **hecho**
 - ✅ Pagos centralizados del hub en `/pagar`: métodos por hubId (header/cookie) con fallback a los del negocio si el hub no configuró ninguno — **hecho**
-- ⬜ Dashboard Hub (base Agency Portal): pedidos consolidados con filtros, gestión de negocios, categorías, usuarios, branding, config de métodos de pago del hub
+- ✅ Dashboard Hub (/hub-admin): login + onboarding self-serve, KPIs por rango, pedidos consolidados con filtros y cambio de estado, gestión de negocios (crear/pausar), categorías globales, usuarios (incl. accesos de Portal Business), métodos de pago centralizados y branding — **hecho**
 - ⬜ Portal Business: resumen, pedidos propios, top productos, cambiar estado de pedidos
 
 ### F3 — Comercial
