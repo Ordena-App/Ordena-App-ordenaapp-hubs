@@ -159,9 +159,11 @@ Dos ajustes: (a) URL por subdominio en lugar de path (misma autonomía, cero col
 - ⬜ Notificación WhatsApp al hub en cada pedido (requiere definir plantilla Meta del hub — F2)
 
 ### F2 — Experiencia (MVP comercial junto a F1)
-- ⬜ Middleware frontend: wildcard `{slug}.ordena.app` → storefront hub
-- ⬜ Storefront hub: home con negocios/categorías, búsqueda global, página de negocio (reuso del storefront actual), checkout con `hub_id` y métodos de pago del hub
-- ⬜ Dashboard Hub (base Agency Portal): pedidos consolidados con filtros, gestión de negocios, categorías, usuarios, branding
+- ✅ Middleware frontend: wildcard `{slug}.ordena.app` (+ `{slug}.localhost` dev) → resolve cacheado, cookies `hubId`/`hubSlug`, headers `x-hub-id` al SSR, rewrite `/` → `/hub/[hubSlug]` y `/{negocio}` → store_link namespaceado (mecánico) — **hecho**
+- ✅ Storefront hub: home con branding, búsqueda transversal (debounce + query compartible), categorías globales, grid de productos con negocio/estado, directorio con Abierto/Cerrado/Pausado. Página de negocio/carrito/checkout = reuso 100% del storefront existente — **hecho**
+- ✅ Checkout con `hub_id` (cookie) — **hecho**
+- ✅ Pagos centralizados del hub en `/pagar`: métodos por hubId (header/cookie) con fallback a los del negocio si el hub no configuró ninguno — **hecho**
+- ⬜ Dashboard Hub (base Agency Portal): pedidos consolidados con filtros, gestión de negocios, categorías, usuarios, branding, config de métodos de pago del hub
 - ⬜ Portal Business: resumen, pedidos propios, top productos, cambiar estado de pedidos
 
 ### F3 — Comercial
