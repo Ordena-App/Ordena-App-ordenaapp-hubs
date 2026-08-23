@@ -9,6 +9,7 @@ export const JWT_SECRET = process.env.JWT_SECRET || 'hubs-service-secret';
 export const BUSINESS_SERVICE_LINK = process.env.BUSINESS_SERVICE_LINK || 'http://localhost:3002/api';
 export const ORDERS_SERVICE_LINK = process.env.ORDERS_SERVICE_LINK || 'http://localhost:3005/api';
 export const PRODUCTS_SERVICE_LINK = process.env.PRODUCTS_SERVICE_LINK || 'http://localhost:3004/api';
+export const PAYMENTS_SERVICE_LINK = process.env.PAYMENTS_SERVICE_LINK || 'http://localhost:3006/api';
 
 // Secreto compartido para llamadas server-to-server (mismo patrón que
 // whatsapp-bot / shipping: el receptor valida el header x-ordena-secret).
