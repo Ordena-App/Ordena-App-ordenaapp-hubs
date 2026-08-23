@@ -1,0 +1,39 @@
+{
+  "name": "ordenaapp-hubs",
+  "version": "0.1.0",
+  "description": "Servicio del Modo Multi-Negocio: Hubs/Operadores que administran multiples negocios dentro de Ordena App",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "Hubs",
+    "Multi-Negocio",
+    "OrdenaApp"
+  ],
+  "author": "Ordena App",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.5",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.1.0",
+    "mongoose": "^9.2.1",
+    "morgan": "^1.10.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/morgan": "^1.9.10",
+    "nodemon": "^3.1.11"
+  }
+}

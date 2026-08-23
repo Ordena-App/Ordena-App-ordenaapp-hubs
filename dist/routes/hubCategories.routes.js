@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const hubCategories_controller_1 = require("../controllers/hubCategories.controller");
+const auth_1 = require("../utils/auth");
+const router = (0, express_1.Router)();
+router.get("/me/categories", auth_1.verifyHubJWT, hubCategories_controller_1.getMyHubCategories);
+router.post("/me/categories", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubCategories_controller_1.createHubCategory);
+router.put("/me/categories/:id", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubCategories_controller_1.updateHubCategory);
+router.delete("/me/categories/:id", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubCategories_controller_1.deleteHubCategory);
+exports.default = router;

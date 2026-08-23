@@ -1,0 +1,107 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const mongoose_1 = require("mongoose");
+// ---- Branding del Hub (la experiencia pública pertenece al operador) ----
+const brandingSchema = new mongoose_1.Schema({
+    primaryColor: { type: String },
+    primaryForeground: { type: String },
+    secondaryColor: { type: String },
+    gradientFrom: { type: String },
+    gradientTo: { type: String },
+    bannerUrl: { type: String },
+}, { _id: false });
+const contactSchema = new mongoose_1.Schema({
+    email: { type: String },
+    phone: { type: String },
+    // Número que recibe la notificación general de cada pedido del hub
+    // (adicional a la notificación que recibe el negocio correspondiente).
+    whatsapp: { type: String },
+    website: { type: String },
+    instagram: { type: String },
+    facebook: { type: String },
+    tiktok: { type: String },
+}, { _id: false });
+// ---- Dominio custom (F4; el schema queda listo desde F1) ----
+const domainSchema = new mongoose_1.Schema({
+    requestedDomain: { type: String },
+    verifiedDomain: { type: String },
+    sslEnabled: { type: Boolean, default: false },
+    status: {
+        type: String,
+        enum: ["unconfigured", "pending", "verified", "error"],
+        default: "unconfigured",
+    },
+}, { _id: false });
+// ---- Suscripción del Hub (F3: Stripe directo, como CORE) ----
+// El Hub es el cliente de Ordena: una sola suscripción cubre todos sus
+// negocios. Los negocios HUB_MANAGED no pagan individualmente.
+const subscriptionSchema = new mongoose_1.Schema({
+    source: { type: String, enum: ["STRIPE", "MANUAL"], default: "STRIPE" },
+    status: {
+        type: String,
+        enum: ["ACTIVE", "CANCELLED", "EXPIRED", "PAUSED", "PAST_DUE", "CANCELED", "INACTIVE", "TRIAL"],
+        default: "TRIAL",
+    },
+    planRef: {
+        kind: { type: String, enum: ["HUB_PLAN"], default: "HUB_PLAN" },
+        lookupKey: { type: String },
+        code: { type: String },
+    },
+    period: {
+        start: { type: Date },
+        end: { type: Date },
+    },
+    billingCycle: { type: String, enum: ["monthly", "yearly"], default: "monthly" },
+    // Límites comerciales del plan. Defaults PERMISIVOS (-1 = ilimitado),
+    // misma convención de red de seguridad que planFeatures en business.
+    limits: {
+        businessesIncluded: { type: Number, default: -1 },
+        ordersPerMonth: { type: Number, default: -1 },
+        extraBusinessPrice: { type: Number, default: 0 },
+        extraOrderPrice: { type: Number, default: 0 },
+    },
+}, { _id: false });
+const hubSchema = new mongoose_1.Schema({
+    name: { type: String, required: true },
+    // Slug público: {slug}.ordena.app. Único global. Se valida contra la
+    // lista de reservados y disponibilidad en el onboarding.
+    slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    description: { type: String },
+    logo: { type: String },
+    favicon: { type: String },
+    branding: { type: brandingSchema, default: () => ({}) },
+    contact: { type: contactSchema, default: () => ({}) },
+    domain: { type: domainSchema, default: () => ({}) },
+    // Zona horaria del hub: cálculos de apertura, estadísticas y rotación de
+    // métricas la respetan. Cada Business mantiene además su propio horario.
+    timezone: { type: String, default: "America/El_Salvador" },
+    country: { type: String, required: true },
+    currency: { type: String, required: true },
+    language: { type: String, enum: ["ES", "EN"], default: "ES" },
+    status: {
+        type: String,
+        enum: ["ACTIVE", "SUSPENDED", "INACTIVE"],
+        default: "ACTIVE",
+    },
+    subscription: { type: subscriptionSchema, default: () => ({}) },
+    // ---- Métricas de uso (límites del plan; rotación mensual idéntica al
+    // patrón usageMetrics de business) ----
+    usageMetrics: {
+        businessesCount: { type: Number, default: 0 },
+        ordersCurrentMonth: { type: Number, default: 0 },
+        ordersPreviousMonth: { type: Number, default: 0 },
+        extraOrdersCurrentMonth: { type: Number, default: 0 },
+        lastRotatedAt: { type: Date },
+    },
+    // ---- Visibilidad hacia los Businesses (F4: configurable por hub) ----
+    // Qué información del cliente final puede ver cada Business en su portal.
+    businessVisibility: {
+        customerName: { type: Boolean, default: true },
+        customerPhone: { type: Boolean, default: false },
+        customerAddress: { type: Boolean, default: false },
+    },
+    isTestHub: { type: Boolean, default: false },
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now },
+});
+exports.default = (0, mongoose_1.model)("hubs", hubSchema);

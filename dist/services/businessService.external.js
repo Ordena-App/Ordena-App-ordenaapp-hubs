@@ -1,0 +1,84 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createHubBusiness = createHubBusiness;
+exports.getBusinessesByHubId = getBusinessesByHubId;
+exports.getBusinessById = getBusinessById;
+exports.assertBusinessBelongsToHub = assertBusinessBelongsToHub;
+exports.patchBusinessInternal = patchBusinessInternal;
+const axios_1 = __importDefault(require("axios"));
+const config_1 = require("../config/config");
+// ============================================================================
+// Contrato F1 con business-service (server-to-server).
+//
+// Estos endpoints son la contraparte que business-service debe exponer para el
+// Modo Multi-Negocio (espejo del patrón agencies: GET /businesses/agency/:id).
+// Hasta que aterricen, las llamadas devuelven el error del upstream tal cual —
+// el controller lo traduce a un 502 explicativo.
+//
+//   POST  /business/hub-managed          → crea Business con context HUB_MANAGED,
+//                                          hubId, planRef.kind HUB_PLAN. No exige
+//                                          cuenta Firebase del dueño.
+//   GET   /businesses/hub/:hubId         → lista businesses del hub (proyección
+//                                          ligera: nombre, slug, logo, status,
+//                                          horario resumido).
+//   PATCH /business/:id/internal         → ya EXISTE: actualizaciones internas
+//                                          (status operativo, etc.).
+// ============================================================================
+function internalHeaders(extra) {
+    return Object.assign(Object.assign({}, (config_1.INTERNAL_SHARED_SECRET ? { "x-ordena-secret": config_1.INTERNAL_SHARED_SECRET } : {})), (extra || {}));
+}
+function createHubBusiness(payload) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.post(`${config_1.BUSINESS_SERVICE_LINK}/business/hub-managed`, payload, { timeout: 15000, headers: internalHeaders() });
+        return data;
+    });
+}
+function getBusinessesByHubId(hubId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}`, { timeout: 15000, headers: internalHeaders() });
+        return data;
+    });
+}
+function getBusinessById(businessId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.BUSINESS_SERVICE_LINK}/business/${businessId}`, { timeout: 15000, headers: internalHeaders({ "x-business-id": businessId }) });
+        return data;
+    });
+}
+/**
+ * Verificación de pertenencia hub ↔ business. TODA operación sobre un negocio
+ * debe pasar por aquí antes de tocar/leer nada: es la garantía de que nunca se
+ * expone información entre negocios ni entre hubs.
+ */
+function assertBusinessBelongsToHub(hubId, businessId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c;
+        const resp = yield getBusinessById(businessId);
+        const business = (_c = (_b = (_a = resp === null || resp === void 0 ? void 0 : resp.data) === null || _a === void 0 ? void 0 : _a.business) !== null && _b !== void 0 ? _b : resp === null || resp === void 0 ? void 0 : resp.data) !== null && _c !== void 0 ? _c : null;
+        const businessHubId = (business === null || business === void 0 ? void 0 : business.hubId) ? String(business.hubId) : null;
+        if (!business || businessHubId !== String(hubId)) {
+            const err = new Error("business_not_in_hub");
+            err.code = "BUSINESS_NOT_IN_HUB";
+            throw err;
+        }
+        return business;
+    });
+}
+function patchBusinessInternal(businessId, patch) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/business/${businessId}/internal`, patch, { timeout: 15000, headers: internalHeaders({ "x-business-id": businessId }) });
+        return data;
+    });
+}
