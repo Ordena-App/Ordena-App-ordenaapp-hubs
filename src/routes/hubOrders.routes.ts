@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getMyHubOrders, updateMyHubOrderStatus, getMyHubDashboard } from "../controllers/hubOrders.controller";
+import { getMyHubOrders, updateMyHubOrderStatus, getMyHubDashboard, getMyBusinessPortalSummary } from "../controllers/hubOrders.controller";
 import {
     getMyHubPaymentAccounts,
     createMyHubPaymentAccount,
@@ -13,6 +13,13 @@ const router = Router();
 // ── Dashboard + pedidos ──
 // Pedidos: todos los roles (BUSINESS_VIEWER queda scoped a su negocio en el controller)
 router.get("/me/dashboard", verifyHubJWT, requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), getMyHubDashboard);
+// Portal Business: resumen de UN negocio (viewer: el suyo; roles hub: ?businessId)
+router.get(
+    "/me/portal/summary",
+    verifyHubJWT,
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"),
+    getMyBusinessPortalSummary
+);
 router.get(
     "/me/orders",
     verifyHubJWT,

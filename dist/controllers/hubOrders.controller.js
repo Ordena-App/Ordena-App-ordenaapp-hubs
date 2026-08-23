@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMyHubOrders = getMyHubOrders;
 exports.updateMyHubOrderStatus = updateMyHubOrderStatus;
+exports.getMyBusinessPortalSummary = getMyBusinessPortalSummary;
 exports.getMyHubDashboard = getMyHubDashboard;
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const ordersService_external_1 = require("../services/ordersService.external");
@@ -97,6 +98,60 @@ function updateMyHubOrderStatus(req, res) {
         }
         catch (error) {
             return upstreamError(res, error, "actualizar el pedido");
+        }
+    });
+}
+/**
+ * GET /api/hubs/me/portal/summary?from=&to=[&businessId=]
+ * Resumen del Portal Business: KPIs y top productos de UN negocio del hub.
+ * BUSINESS_VIEWER: siempre su negocio (token). Roles de hub: pasan businessId.
+ */
+function getMyBusinessPortalSummary(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const ctx = req.hubContext;
+        try {
+            const requested = typeof req.query.businessId === "string" ? req.query.businessId : undefined;
+            const businessId = (0, auth_1.resolveScopedBusinessId)(ctx, requested);
+            if (!businessId) {
+                return res.status(400).json({
+                    status: false,
+                    statusCode: 400,
+                    message: ctx.role === "BUSINESS_VIEWER" ? "Acceso sin negocio asignado" : "businessId es requerido",
+                    data: {},
+                });
+            }
+            // Candado de pertenencia + datos públicos del negocio para el header
+            const business = yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, businessId);
+            const from = typeof req.query.from === "string" ? req.query.from : undefined;
+            const to = typeof req.query.to === "string" ? req.query.to : undefined;
+            const summaryResp = yield (0, ordersService_external_1.getHubOrdersSummary)(ctx.hubId, from, to, businessId);
+            const summary = (summaryResp === null || summaryResp === void 0 ? void 0 : summaryResp.data) || { totalOrders: 0, totalSales: 0, byStatus: [], topProducts: [] };
+            return res.status(200).json({
+                status: true,
+                statusCode: 200,
+                message: "Resumen del negocio",
+                data: {
+                    business: {
+                        _id: business._id,
+                        name: business.name,
+                        hubSlug: business.hubSlug,
+                        image_url: business.image_url,
+                        operationalStatus: business.operationalStatus || "active",
+                    },
+                    summary,
+                },
+            });
+        }
+        catch (error) {
+            if ((error === null || error === void 0 ? void 0 : error.code) === "BUSINESS_NOT_IN_HUB") {
+                return res.status(403).json({
+                    status: false,
+                    statusCode: 403,
+                    message: "El negocio no pertenece a este hub",
+                    data: {},
+                });
+            }
+            return upstreamError(res, error, "cargar el resumen del negocio");
         }
     });
 }

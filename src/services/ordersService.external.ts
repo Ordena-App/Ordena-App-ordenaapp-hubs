@@ -27,9 +27,9 @@ export async function getHubOrders(hubId: string, query: HubOrdersQuery) {
     return data;
 }
 
-export async function getHubOrdersSummary(hubId: string, from?: string, to?: string) {
+export async function getHubOrdersSummary(hubId: string, from?: string, to?: string, businessId?: string) {
     const { data } = await axios.get(`${ORDERS_SERVICE_LINK}/internal/hub/${hubId}/summary`, {
-        params: { from, to },
+        params: { from, to, businessId },
         timeout: 15000,
         headers: headers(),
     });

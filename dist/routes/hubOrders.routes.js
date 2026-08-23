@@ -8,6 +8,8 @@ const router = (0, express_1.Router)();
 // ── Dashboard + pedidos ──
 // Pedidos: todos los roles (BUSINESS_VIEWER queda scoped a su negocio en el controller)
 router.get("/me/dashboard", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubOrders_controller_1.getMyHubDashboard);
+// Portal Business: resumen de UN negocio (viewer: el suyo; roles hub: ?businessId)
+router.get("/me/portal/summary", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"), hubOrders_controller_1.getMyBusinessPortalSummary);
 router.get("/me/orders", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"), hubOrders_controller_1.getMyHubOrders);
 router.patch("/me/orders/:orderId/status", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"), hubOrders_controller_1.updateMyHubOrderStatus);
 // ── Métodos de pago centralizados del hub (solo administración) ──

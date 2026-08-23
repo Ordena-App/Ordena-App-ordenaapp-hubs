@@ -33,10 +33,10 @@ function getHubOrders(hubId, query) {
         return data;
     });
 }
-function getHubOrdersSummary(hubId, from, to) {
+function getHubOrdersSummary(hubId, from, to, businessId) {
     return __awaiter(this, void 0, void 0, function* () {
         const { data } = yield axios_1.default.get(`${config_1.ORDERS_SERVICE_LINK}/internal/hub/${hubId}/summary`, {
-            params: { from, to },
+            params: { from, to, businessId },
             timeout: 15000,
             headers: headers(),
         });
