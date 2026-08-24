@@ -20,9 +20,9 @@ Corregido durante la revisión (ya commiteado):
 3. La búsqueda del storefront hub pasaba el input crudo a `$regex` (escape agregado).
 4. El modal "Agregar negocio" tenía `country_code` fijo en `+51` (ahora editable).
 
-### ⚠️ Gap funcional conocido (no bloquea el deploy, sí el piloto completo)
+### ✅ Gap de productos: CERRADO (F2.1)
 
-**Cargar productos a un negocio hub aún no tiene puerta de entrada.** El dashboard hub no tiene sección de Productos, y el admin clásico exige login Firebase con `email === business.email` (los negocios hub usan email sintetizado, nadie puede loguearse ahí). Para el smoke test de staging se cargan por llamada interna directa al products-service (ver §6). **Siguiente incremento recomendado (F2.1):** sección "Productos" en `/hub-admin` con endpoints proxy en el ms hubs — patrón idéntico al de pedidos.
+El dashboard hub ahora tiene la sección **Productos**: selector de negocio, crear producto con hasta 4 fotos (proxy multipart hubs→products, sube al bucket de Firebase), editar precio/stock/descripción, activar/desactivar, eliminar y **asignar categorías globales** por producto. Endpoints: `GET/POST /api/hubs/me/businesses/:businessId/products`, `PATCH/DELETE .../:productId`, `PATCH /api/hubs/me/products/:productId/hub-categories` — todos con validación de pertenencia hub→negocio y límites de plan del upstream intactos.
 
 Otros menores conocidos (no bloquean): creación concurrente del mismo negocio puede dar 500 por índice único (reintentar funciona); el botón "Ver tienda" del dashboard arma la URL `*.ordena.app` (en staging apunta a prod — cosmético); el toggle `allowSalesOutsideHours` da 500 si el negocio jamás abrió sus settings (se auto-crean al primer GET — escenario raro).
 
@@ -133,20 +133,8 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 
 1. **Crear hub**: `/hub-admin/login` → "Crear mi hub" → nombre "Hub Prueba", país Perú → entra al dashboard. ✅ esperado: `hub-prueba.staging.ordena.app` resuelve.
 2. **Crear 2 negocios** en *Negocios* (ej. "Pizzería Uno", "Ferretería Dos"). ✅ ambos con su slug y estado Activo.
-3. **Cargar productos** (workaround del gap §0 — llamada interna directa al products-service, NO por gateway):
-   ```bash
-   curl -X POST http://<products-staging>:3004/api/product \
-     -H "x-business-id: <businessId del negocio>" \
-     -F "name=Pizza Pepperoni" -F "price=35" -F "industry=food" \
-     -F "description=La clasica" -F "stock=100"
-   ```
-   (o insertar por Mongo/Compass; el `businessId` sale de la card del negocio o de la colección `businesses`).
-4. **Categorías globales**: crear "Pizza" y "Herramientas"; taggear un producto vía interno:
-   ```bash
-   curl -X PATCH "http://<products-staging>:3004/api/internal/hub/<hubId>/product/<productId>/hub-categories" \
-     -H "content-type: application/json" -H "x-ordena-secret: SECRETO_INTERNO" \
-     -d '{"hubCategoryIds":["<hubCategoryId>"]}'
-   ```
+3. **Cargar productos**: en *Productos*, elegir el negocio → "Agregar producto" (nombre, precio, stock, descripción, fotos). ✅ el producto aparece en la lista con su imagen.
+4. **Categorías globales**: crear "Pizza" y "Herramientas" en *Categorías*; en *Productos* usar el botón de etiquetas de un producto para asignarle una. ✅ el chip aparece en la card.
 5. **Storefront**: abrir `hub-prueba.staging.ordena.app` → se ven negocios, categorías, productos con su negocio; buscar "pizza" filtra transversal.
 6. **Compra**: entrar a `/{negocio}`, agregar al carrito, checkout con datos de prueba. ✅ la orden en Mongo trae `hub_id`; el hub la ve en *Pedidos*; el OTRO negocio no la ve.
 7. **Pagos del hub**: en *Pagos* configurar una transferencia bancaria → abrir el link de pago del pedido (`/{negocio}/ordenes/{id}/pagar`) → aparece la cuenta DEL HUB (no la del negocio).
@@ -160,7 +148,6 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 
 ## 7. Pendientes después de staging (recordatorio)
 
-- **F2.1**: gestión de productos del negocio desde `/hub-admin` (cierra el gap del §0).
 - **F3**: planes `hub_*` en Stripe + webhook → ms hubs, límites activos, reportes hub en ms-reportes.
 - **WhatsApp al hub**: crear plantilla Meta y conectar la notificación por pedido.
 - **F4**: dominio custom del hub, visibilidad configurable, conectar negocios Ordena existentes, estado de cuenta/liquidaciones.

@@ -17,6 +17,7 @@
   "author": "Ordena App",
   "license": "ISC",
   "dependencies": {
+    "@types/multer": "^2.2.0",
     "axios": "^1.13.5",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
@@ -26,6 +27,7 @@
     "mongodb": "^7.1.0",
     "mongoose": "^9.2.1",
     "morgan": "^1.10.1",
+    "multer": "^2.2.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
