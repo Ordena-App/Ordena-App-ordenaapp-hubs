@@ -4,6 +4,7 @@ import hubModel from "../models/hubModel";
 import hubUserModel, { HubUserRole } from "../models/hubUserModel";
 import { signHubToken } from "../utils/auth";
 import { normalizeSlug, isValidSlug } from "../utils/slug";
+import { assertBusinessBelongsToHub } from "../services/businessService.external";
 
 const SALT_ROUNDS = 10;
 
@@ -209,6 +210,21 @@ export async function createHubUser(req: Request, res: Response): Promise<Respon
                 message: "businessId es requerido para el rol BUSINESS_VIEWER",
                 data: {},
             });
+        }
+        // El acceso de portal solo puede apuntar a un negocio de ESTE hub.
+        // (Sin esto, un businessId ajeno crearia un login roto: el scope del
+        // token impide fugas, pero el viewer no veria nada.)
+        if (role === "BUSINESS_VIEWER") {
+            try {
+                await assertBusinessBelongsToHub(ctx.hubId, String(businessId));
+            } catch {
+                return res.status(400).json({
+                    status: false,
+                    statusCode: 400,
+                    message: "El negocio indicado no pertenece a este hub",
+                    data: {},
+                });
+            }
         }
 
         const emailTaken = await hubUserModel.exists({ email: String(email).toLowerCase().trim() });

@@ -22,6 +22,7 @@ const hubModel_1 = __importDefault(require("../models/hubModel"));
 const hubUserModel_1 = __importDefault(require("../models/hubUserModel"));
 const auth_1 = require("../utils/auth");
 const slug_1 = require("../utils/slug");
+const businessService_external_1 = require("../services/businessService.external");
 const SALT_ROUNDS = 10;
 /**
  * Onboarding self-serve: crea el Hub + su HUB_OWNER en una sola llamada.
@@ -211,6 +212,22 @@ function createHubUser(req, res) {
                     message: "businessId es requerido para el rol BUSINESS_VIEWER",
                     data: {},
                 });
+            }
+            // El acceso de portal solo puede apuntar a un negocio de ESTE hub.
+            // (Sin esto, un businessId ajeno crearia un login roto: el scope del
+            // token impide fugas, pero el viewer no veria nada.)
+            if (role === "BUSINESS_VIEWER") {
+                try {
+                    yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, String(businessId));
+                }
+                catch (_a) {
+                    return res.status(400).json({
+                        status: false,
+                        statusCode: 400,
+                        message: "El negocio indicado no pertenece a este hub",
+                        data: {},
+                    });
+                }
             }
             const emailTaken = yield hubUserModel_1.default.exists({ email: String(email).toLowerCase().trim() });
             if (emailTaken) {
