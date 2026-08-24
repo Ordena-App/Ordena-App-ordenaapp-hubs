@@ -164,6 +164,7 @@ Dos ajustes: (a) URL por subdominio en lugar de path (misma autonomía, cero col
 - ✅ Checkout con `hub_id` (cookie) — **hecho**
 - ✅ Pagos centralizados del hub en `/pagar`: métodos por hubId (header/cookie) con fallback a los del negocio si el hub no configuró ninguno — **hecho**
 - ✅ Dashboard Hub (/hub-admin): login + onboarding self-serve, KPIs por rango, pedidos consolidados con filtros y cambio de estado, gestión de negocios (crear/pausar), categorías globales, usuarios (incl. accesos de Portal Business), métodos de pago centralizados y branding — **hecho**
+- ✅ F2.1 — Productos de los negocios del hub desde /hub-admin: crear con fotos (proxy multipart hubs→products), editar, activar/desactivar, eliminar, categorías globales por producto — **hecho** (cierra el flujo "Agregar productos" del §49)
 - ✅ Portal Business (/hub-portal): experiencia dedicada del BUSINESS_VIEWER — resumen (KPIs, estados, top productos), sus pedidos con cambio de estado; routing por rol desde el login — **hecho**
 
 ### F3 — Comercial
