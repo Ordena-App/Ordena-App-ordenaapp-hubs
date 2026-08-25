@@ -37,6 +37,8 @@ export interface CreateHubBusinessPayload {
     email?: string;
     address?: string;
     region_settings: { country: string; currency: string; language?: "ES" | "EN" };
+    /** Branding del hub: el storefront del negocio nace con estos colores. */
+    branding?: { primaryColor?: string; primaryForeground?: string };
 }
 
 export async function createHubBusiness(payload: CreateHubBusinessPayload) {
@@ -89,6 +91,45 @@ export async function patchBusinessInternal(businessId: string, patch: Record<st
         `${BUSINESS_SERVICE_LINK}/business/${businessId}/internal`,
         patch,
         { timeout: 15000, headers: internalHeaders({ "x-business-id": businessId }) }
+    );
+    return data;
+}
+
+export async function getBusinessSettingsExternal(businessId: string) {
+    const { data } = await axios.get(
+        `${BUSINESS_SERVICE_LINK}/business-settings/${businessId}`,
+        { timeout: 15000, headers: internalHeaders({ "x-business-id": businessId }) }
+    );
+    return data;
+}
+
+/** PATCH horario semanal (+ timezone y allowSalesOutsideHours) del negocio. */
+export async function patchBusinessWeeklyHours(
+    businessId: string,
+    body: { timezone?: string; weeklyHours?: unknown[]; allowSalesOutsideHours?: boolean }
+) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/business-settings/${businessId}/hours/weekly`,
+        body,
+        { timeout: 15000, headers: internalHeaders({ "x-business-id": businessId }) }
+    );
+    return data;
+}
+
+/** Sube el logo del negocio (endpoint interno hub-logo; FormData nativo Node >= 18). */
+export async function uploadBusinessLogoExternal(
+    businessId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string }
+) {
+    const FormDataCtor: any = (globalThis as any).FormData;
+    if (!FormDataCtor) throw new Error("Node >= 18 requerido para subir imágenes");
+    const { Blob } = require("buffer");
+    const fd = new FormDataCtor();
+    fd.append("image", new Blob([file.buffer as unknown as ArrayBuffer], { type: file.mimetype }), file.originalname);
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/business/${businessId}/hub-logo`,
+        fd,
+        { timeout: 30000, headers: internalHeaders({ "x-business-id": businessId }) }
     );
     return data;
 }
