@@ -17,6 +17,9 @@ exports.getBusinessesByHubId = getBusinessesByHubId;
 exports.getBusinessById = getBusinessById;
 exports.assertBusinessBelongsToHub = assertBusinessBelongsToHub;
 exports.patchBusinessInternal = patchBusinessInternal;
+exports.getBusinessSettingsExternal = getBusinessSettingsExternal;
+exports.patchBusinessWeeklyHours = patchBusinessWeeklyHours;
+exports.uploadBusinessLogoExternal = uploadBusinessLogoExternal;
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("../config/config");
 // ============================================================================
@@ -82,6 +85,32 @@ function assertBusinessBelongsToHub(hubId, businessId) {
 function patchBusinessInternal(businessId, patch) {
     return __awaiter(this, void 0, void 0, function* () {
         const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/business/${businessId}/internal`, patch, { timeout: 15000, headers: internalHeaders({ "x-business-id": businessId }) });
+        return data;
+    });
+}
+function getBusinessSettingsExternal(businessId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.BUSINESS_SERVICE_LINK}/business-settings/${businessId}`, { timeout: 15000, headers: internalHeaders({ "x-business-id": businessId }) });
+        return data;
+    });
+}
+/** PATCH horario semanal (+ timezone y allowSalesOutsideHours) del negocio. */
+function patchBusinessWeeklyHours(businessId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/business-settings/${businessId}/hours/weekly`, body, { timeout: 15000, headers: internalHeaders({ "x-business-id": businessId }) });
+        return data;
+    });
+}
+/** Sube el logo del negocio (endpoint interno hub-logo; FormData nativo Node >= 18). */
+function uploadBusinessLogoExternal(businessId, file) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const FormDataCtor = globalThis.FormData;
+        if (!FormDataCtor)
+            throw new Error("Node >= 18 requerido para subir imágenes");
+        const { Blob } = require("buffer");
+        const fd = new FormDataCtor();
+        fd.append("image", new Blob([file.buffer], { type: file.mimetype }), file.originalname);
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/business/${businessId}/hub-logo`, fd, { timeout: 30000, headers: internalHeaders({ "x-business-id": businessId }) });
         return data;
     });
 }
