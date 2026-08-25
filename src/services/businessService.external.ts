@@ -37,6 +37,8 @@ export interface CreateHubBusinessPayload {
     email?: string;
     address?: string;
     region_settings: { country: string; currency: string; language?: "ES" | "EN" };
+    /** Branding del hub: el storefront del negocio nace con estos colores. */
+    branding?: { primaryColor?: string; primaryForeground?: string };
 }
 
 export async function createHubBusiness(payload: CreateHubBusinessPayload) {

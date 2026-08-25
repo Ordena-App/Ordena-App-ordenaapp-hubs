@@ -83,6 +83,16 @@ export async function createBusinessForMyHub(req: Request, res: Response): Promi
                 currency: hub.currency,
                 language: hub.language,
             },
+            // Cohesión visual: la tienda del negocio hereda los colores del hub
+            // desde el día 1 (si el negocio personaliza después, manda lo suyo).
+            ...(hub.branding?.primaryColor
+                ? {
+                    branding: {
+                        primaryColor: hub.branding.primaryColor,
+                        primaryForeground: hub.branding.primaryForeground,
+                    },
+                }
+                : {}),
         });
 
         await hubModel.updateOne(

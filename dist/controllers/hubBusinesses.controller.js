@@ -46,7 +46,7 @@ function upstreamError(res, error, action) {
  */
 function createBusinessForMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d;
+        var _a, _b, _c, _d, _e;
         const ctx = req.hubContext;
         try {
             const { name, slug, description, industry, country_code, phone, email, address, region_settings } = req.body || {};
@@ -77,28 +77,31 @@ function createBusinessForMyHub(req, res) {
                     data: { limit, current: hub.usageMetrics.businessesCount },
                 });
             }
-            const created = yield (0, businessService_external_1.createHubBusiness)({
-                hubId: ctx.hubId,
-                name,
+            const created = yield (0, businessService_external_1.createHubBusiness)(Object.assign({ hubId: ctx.hubId, name,
                 slug,
                 description,
                 industry,
                 country_code,
                 phone,
                 email,
-                address,
-                region_settings: region_settings || {
+                address, region_settings: region_settings || {
                     country: hub.country,
                     currency: hub.currency,
                     language: hub.language,
-                },
-            });
+                } }, (((_d = hub.branding) === null || _d === void 0 ? void 0 : _d.primaryColor)
+                ? {
+                    branding: {
+                        primaryColor: hub.branding.primaryColor,
+                        primaryForeground: hub.branding.primaryForeground,
+                    },
+                }
+                : {})));
             yield hubModel_1.default.updateOne({ _id: ctx.hubId }, { $inc: { "usageMetrics.businessesCount": 1 }, $set: { updated_at: new Date() } });
             return res.status(201).json({
                 status: true,
                 statusCode: 201,
                 message: "Negocio creado correctamente",
-                data: (_d = created === null || created === void 0 ? void 0 : created.data) !== null && _d !== void 0 ? _d : created,
+                data: (_e = created === null || created === void 0 ? void 0 : created.data) !== null && _e !== void 0 ? _e : created,
             });
         }
         catch (error) {
