@@ -5,6 +5,9 @@ import {
     getBusinessesByHubId,
     assertBusinessBelongsToHub,
     patchBusinessInternal,
+    getBusinessSettingsExternal,
+    patchBusinessWeeklyHours,
+    uploadBusinessLogoExternal,
 } from "../services/businessService.external";
 
 // Traduce fallos del upstream (business-service) a respuestas claras.
@@ -159,5 +162,130 @@ export async function updateBusinessOperationalStatus(req: Request, res: Respons
         });
     } catch (error: any) {
         return upstreamError(res, error, "actualizar el estado del negocio");
+    }
+}
+
+/**
+ * GET /api/hubs/me/businesses/:businessId — detalle para /hub-admin:
+ * identidad pública del negocio + horario (businessHours con
+ * allowSalesOutsideHours) leído de sus settings.
+ */
+export async function getMyHubBusinessDetail(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const businessId = String(req.params.businessId);
+        const business = await assertBusinessBelongsToHub(ctx.hubId, businessId);
+        let businessHours: unknown = null;
+        try {
+            const settingsResp = await getBusinessSettingsExternal(businessId);
+            businessHours = settingsResp?.data?.businessHours ?? settingsResp?.businessHours ?? null;
+        } catch (e: any) {
+            console.error("[business-detail] settings fetch:", e?.response?.status || e?.message);
+        }
+        return res.status(200).json({
+            status: true,
+            statusCode: 200,
+            message: "Detalle del negocio",
+            data: {
+                business: {
+                    _id: business._id,
+                    name: business.name,
+                    hubSlug: business.hubSlug,
+                    store_link: business.store_link,
+                    image_url: business.image_url,
+                    description: business.description,
+                    industry: business.industry,
+                    phone: business.phone,
+                    address: business.address,
+                    operationalStatus: business.operationalStatus || "active",
+                },
+                businessHours,
+            },
+        });
+    } catch (error: any) {
+        return upstreamError(res, error, "cargar el negocio");
+    }
+}
+
+// Campos de identidad que el hub puede editar de sus negocios.
+const BUSINESS_INFO_FIELDS = ["name", "description", "phone", "address"] as const;
+
+/** PATCH /api/hubs/me/businesses/:businessId — info básica (vía patch interno). */
+export async function updateMyHubBusinessInfo(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const businessId = String(req.params.businessId);
+        await assertBusinessBelongsToHub(ctx.hubId, businessId);
+
+        const patch: Record<string, unknown> = {};
+        for (const f of BUSINESS_INFO_FIELDS) {
+            if (typeof (req.body || {})[f] === "string") patch[f] = (req.body as any)[f];
+        }
+        if (Object.keys(patch).length === 0) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "Nada que actualizar",
+                data: {},
+            });
+        }
+        const updated = await patchBusinessInternal(businessId, patch);
+        return res.status(200).json({
+            status: true,
+            statusCode: 200,
+            message: "Negocio actualizado",
+            data: updated?.data ?? updated,
+        });
+    } catch (error: any) {
+        return upstreamError(res, error, "actualizar el negocio");
+    }
+}
+
+/** POST /api/hubs/me/businesses/:businessId/logo (multipart 'image'). */
+export async function uploadMyHubBusinessLogo(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const businessId = String(req.params.businessId);
+        await assertBusinessBelongsToHub(ctx.hubId, businessId);
+        const file = (req as any).file as { buffer: Buffer; originalname: string; mimetype: string } | undefined;
+        if (!file) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "Archivo 'image' requerido",
+                data: {},
+            });
+        }
+        const resp = await uploadBusinessLogoExternal(businessId, file);
+        return res.status(200).json(resp);
+    } catch (error: any) {
+        return upstreamError(res, error, "subir el logo");
+    }
+}
+
+/**
+ * PATCH /api/hubs/me/businesses/:businessId/hours
+ * Body: { timezone?, weeklyHours?, allowSalesOutsideHours? } — mismo contrato
+ * que el endpoint hours/weekly de business (valida overnight, solapes, etc.).
+ */
+export async function updateMyHubBusinessHours(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const businessId = String(req.params.businessId);
+        await assertBusinessBelongsToHub(ctx.hubId, businessId);
+        const { timezone, weeklyHours, allowSalesOutsideHours } = req.body || {};
+        const resp = await patchBusinessWeeklyHours(businessId, {
+            ...(timezone !== undefined ? { timezone } : {}),
+            ...(weeklyHours !== undefined ? { weeklyHours } : {}),
+            ...(typeof allowSalesOutsideHours === "boolean" ? { allowSalesOutsideHours } : {}),
+        });
+        return res.status(200).json(resp);
+    } catch (error: any) {
+        // Las validaciones de horario del upstream (400) traen mensajes útiles.
+        const st = error?.response?.status;
+        if (st && st >= 400 && st < 500 && error?.response?.data) {
+            return res.status(st).json(error.response.data);
+        }
+        return upstreamError(res, error, "guardar el horario");
     }
 }
