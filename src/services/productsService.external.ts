@@ -31,6 +31,15 @@ export interface UploadedFile {
     mimetype: string;
 }
 
+/** Lee un producto por id (para validar su pertenencia al negocio). */
+export async function getProductByIdExternal(businessId: string, productId: string) {
+    const { data } = await axios.get(`${PRODUCTS_SERVICE_LINK}/product/${productId}`, {
+        timeout: 15000,
+        headers: headers(businessId),
+    });
+    return data;
+}
+
 export async function createBusinessProduct(
     businessId: string,
     fields: Record<string, unknown>,

@@ -6,6 +6,7 @@ import {
     updateBusinessProduct,
     deleteBusinessProduct,
     setProductHubCategoriesExternal,
+    getProductByIdExternal,
     UploadedFile,
 } from "../services/productsService.external";
 
@@ -33,6 +34,30 @@ function upstreamError(res: Response, error: any, action: string): Response {
         message: `No se pudo ${action} (products-service respondió ${upstreamStatus ?? "sin conexión"})`,
         data: {},
     });
+}
+
+/**
+ * Candado extra: el producto DEBE pertenecer al negocio indicado. products ya
+ * acota sus mutaciones por x-business-id, pero validar aquí evita depender de
+ * una sola capa y devuelve un 403 claro en vez de un 404 confuso.
+ */
+async function assertProductBelongsToBusiness(businessId: string, productId: string): Promise<void> {
+    let product: any = null;
+    try {
+        const resp = await getProductByIdExternal(businessId, productId);
+        product = resp?.data?.product ?? resp?.data ?? resp?.product ?? resp ?? null;
+    } catch {
+        product = null;
+    }
+    const ownerId = product && (product.businessId ?? product?.data?.businessId);
+    if (!ownerId || String(ownerId) !== String(businessId)) {
+        const err: any = new Error("product_not_in_business");
+        err.response = {
+            status: 403,
+            data: { status: false, statusCode: 403, message: "El producto no pertenece a este negocio", data: {} },
+        };
+        throw err;
+    }
 }
 
 /** GET /api/hubs/me/businesses/:businessId/products?page=&limit=&name= */
@@ -76,9 +101,11 @@ export async function createMyBusinessProduct(req: Request, res: Response): Prom
                 data: {},
             });
         }
-        // Si maneja stock, activar el tracking para que el storefront lo respete
-        if (fields.stock !== undefined && fields.track_stock === undefined) {
-            fields.track_stock = "true";
+        // track_stock SIEMPRE explícito: con stock => se controla inventario;
+        // sin stock => ilimitado. (products default a true + stock 0 = producto
+        // agotado desde su creación, que es lo contrario de "Stock (opcional)".)
+        if (fields.track_stock === undefined) {
+            fields.track_stock = fields.stock !== undefined ? "true" : "false";
         }
 
         const files: UploadedFile[] = Array.isArray((req as any).files)
@@ -99,7 +126,10 @@ export async function updateMyBusinessProduct(req: Request, res: Response): Prom
         const businessId = String(req.params.businessId);
         const productId = String(req.params.productId);
         await assertBusinessBelongsToHub(ctx.hubId, businessId);
+        await assertProductBelongsToBusiness(businessId, productId);
 
+        // `!== undefined` (no truthy): así un string vacío SÍ limpia el campo
+        // — antes la descripción no se podía borrar desde /hub-admin.
         const patch: Record<string, unknown> = {};
         for (const f of UPDATE_FIELDS) {
             if (req.body && req.body[f] !== undefined) patch[f] = req.body[f];
@@ -127,6 +157,7 @@ export async function deleteMyBusinessProduct(req: Request, res: Response): Prom
         const businessId = String(req.params.businessId);
         const productId = String(req.params.productId);
         await assertBusinessBelongsToHub(ctx.hubId, businessId);
+        await assertProductBelongsToBusiness(businessId, productId);
         const resp = await deleteBusinessProduct(businessId, productId);
         return res.status(200).json(resp);
     } catch (error: any) {

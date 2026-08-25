@@ -74,7 +74,13 @@ function getMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const ctx = req.hubContext;
-            const hub = yield hubModel_1.default.findById(ctx.hubId);
+            // El Portal Business solo necesita identidad y branding del hub: nunca
+            // su suscripción, límites ni métricas de uso (información del operador).
+            const projection = ctx.role === "BUSINESS_VIEWER"
+                ? "name slug logo favicon branding contact timezone country currency language"
+                : undefined;
+            const query = hubModel_1.default.findById(ctx.hubId);
+            const hub = projection ? yield query.select(projection) : yield query;
             if (!hub) {
                 return res.status(404).json({
                     status: false,

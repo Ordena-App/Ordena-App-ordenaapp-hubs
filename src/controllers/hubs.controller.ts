@@ -58,7 +58,14 @@ export async function resolveHubBySlug(req: Request, res: Response): Promise<Res
 export async function getMyHub(req: Request, res: Response): Promise<Response> {
     try {
         const ctx = req.hubContext!;
-        const hub = await hubModel.findById(ctx.hubId);
+        // El Portal Business solo necesita identidad y branding del hub: nunca
+        // su suscripción, límites ni métricas de uso (información del operador).
+        const projection =
+            ctx.role === "BUSINESS_VIEWER"
+                ? "name slug logo favicon branding contact timezone country currency language"
+                : undefined;
+        const query = hubModel.findById(ctx.hubId);
+        const hub = projection ? await query.select(projection) : await query;
         if (!hub) {
             return res.status(404).json({
                 status: false,
