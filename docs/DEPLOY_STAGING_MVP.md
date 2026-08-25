@@ -24,6 +24,22 @@ Corregido durante la revisión (ya commiteado):
 
 El dashboard hub ahora tiene la sección **Productos**: selector de negocio, crear producto con hasta 4 fotos (proxy multipart hubs→products, sube al bucket de Firebase), editar precio/stock/descripción, activar/desactivar, eliminar y **asignar categorías globales** por producto. Endpoints: `GET/POST /api/hubs/me/businesses/:businessId/products`, `PATCH/DELETE .../:productId`, `PATCH /api/hubs/me/products/:productId/hub-categories` — todos con validación de pertenencia hub→negocio y límites de plan del upstream intactos.
 
+### 🔐 Auditoría de seguridad (segunda pasada, multi-agente adversarial)
+
+Se auditó todo el código del hub con 5 revisores + verificación adversarial: **18 hallazgos confirmados**, todos corregidos. Los críticos:
+
+| # | Problema | Corregido en |
+|---|---|---|
+| 1 | `updateProduct` no filtraba por negocio → **cualquiera podía editar productos de cualquier tienda** de la plataforma (precio, stock, visibilidad) | products |
+| 2 | `patchBusinessInternal` **sin autenticación alguna** → reescribir nombre/teléfono/dirección de cualquier negocio | business |
+| 3 | Secreto interno **fail-open**: sin la env, todos los endpoints internos quedaban abiertos (incluido el listado de pedidos con PII de clientes) | hubs, business, orders, products |
+| 4 | `hub_id` aceptado del cliente sin verificar → inyectar pedidos en el panel de un hub ajeno | orders |
+| 5 | `hubPaymentsKey` de header/cookie sin verificar → mostrar las cuentas bancarias de un hub en una tienda ajena | frontend |
+| 6 | Pagos del hub se perdían en el paso 2 de `/pagar` (los 14 detalles no eran hub-aware) | frontend |
+| 7 | Passthrough `--` servía tiendas de OTRO hub bajo el host de un hub | frontend (middleware) |
+
+Además: uploads restringidos a imágenes con límites y errores 400 claros; `/hub-logo` solo toca negocios `HUB_MANAGED` y valida el secreto **antes** de consumir el archivo; el `BUSINESS_VIEWER` ya no recibe la suscripción/límites/métricas del hub; subdominios de infraestructura (`cname`, `dns`, `mx`…) nunca se tratan como hub; `*.localhost` deja de ser origen confiable en producción; y dos bugs de horarios (el editor pisaba el horario real con el default, y el layout perdía el horario al ir al checkout).
+
 Otros menores conocidos (no bloquean): creación concurrente del mismo negocio puede dar 500 por índice único (reintentar funciona); el botón "Ver tienda" del dashboard arma la URL `*.ordena.app` (en staging apunta a prod — cosmético); el toggle `allowSalesOutsideHours` da 500 si el negocio jamás abrió sus settings (se auto-crean al primer GET — escenario raro).
 
 ---
@@ -74,7 +90,7 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 | `ORDERS_SERVICE_LINK` | `http://<orders-staging>:3005/api` | |
 | `PAYMENTS_SERVICE_LINK` | `http://<payments-staging>:3006/api` | |
 | `PRODUCTS_SERVICE_LINK` | `http://<products-staging>:3004/api` | Reservado (tagging de categorías) |
-| `INTERNAL_SHARED_SECRET` | `SECRETO_INTERNO` | Manda `x-ordena-secret` a business/orders/products Y valida el que le manda orders |
+| `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` | **Obligatorio.** Manda `x-ordena-secret` a business/orders/products Y valida el que le manda orders. (También se acepta `INTERNAL_SHARED_SECRET` por compat.) |
 
 ### ordenaapp-api-gateway
 
@@ -105,7 +121,9 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 
 **Sin envs nuevas.** (Frontend usa `GENERAL_API_URL` existente; payments solo ganó el fallback `isHubKey` que lee la shared DB.)
 
-> Compat de despliegue: si algún `INTERNAL_*` falta, los endpoints internos **aceptan sin header** (mismo patrón que `WHATSAPP_SHARED_SECRET`). Staging funciona sin ellos, pero configúralos desde el día 1 — son la barrera de los endpoints `/internal/*`.
+> ⚠️ **El secreto interno es OBLIGATORIO** (cambió tras la auditoría de seguridad): los endpoints internos son ahora **fail-closed** — sin la env configurada devuelven 403 y el Modo Multi-Negocio no funciona (crear negocios, pedidos del hub, productos, logos). Antes aceptaban sin header, lo que los dejaba abiertos a internet a través del gateway.
+>
+> El servicio hubs acepta `INTERNAL_HUBS_SECRET` (nombre canónico) o `INTERNAL_SHARED_SECRET` (compat). **Lo más simple: usa `INTERNAL_HUBS_SECRET` con el mismo valor en los 4 servicios** (hubs, business, orders, products).
 
 ---
 
