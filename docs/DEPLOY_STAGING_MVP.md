@@ -1,7 +1,8 @@
-# Guía de despliegue a Staging — MVP Modo Multi-Negocio (F1 + F2)
+# Guía de despliegue a Staging — MVP Modo Multi-Negocio (F1 + F2 + F3 v1)
 
 **Fecha:** 23 de agosto de 2026
-**Alcance:** todo lo commiteado en `feature/new-mode-ordena-hub` en 7 repos (frontend + hubs + business + orders + products + payments + gateway).
+**Alcance:** todo lo commiteado en `feature/new-mode-ordena-hub` en 8 repos (frontend + hubs + business + orders + products + payments + gateway + whatsapp-bot).
+**Actualizado:** 26 de agosto de 2026 — se sumó **F3 v1** (aviso al repartidor, aviso al hub y privacidad configurable). Lo comercial de Stripe queda para F3 v2.
 
 ---
 
@@ -104,6 +105,15 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 |---|---|
 | `HUBS_SERVICE_LINK` | `http://<hubs-staging>:3013/api` |
 | `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` |
+| `TEMPLATE_DELIVERY_ES` | `pedido_repartidor_es` *(F3 v1 — opcional, es el default)* |
+| `TEMPLATE_HUB_ORDER_ES` | `pedido_hub_es` *(F3 v1 — opcional, es el default)* |
+| `TEMPLATE_BUSINESS_HUB_ES` | `pedido_negocio_hub_es` *(F3 v1 — opcional, es el default)* |
+
+> Las tres `TEMPLATE_*` solo hacen falta si en Meta les pusiste OTRO nombre. El
+> código trae esos defaults. Lo que SÍ es obligatorio: que las plantillas
+> existan **aprobadas** en Meta como categoría **Utility** antes de probar
+> (ver `ordenaapp-whatsapp-bot/PLANTILLAS_REPARTIDOR_Y_HUB.md`); si no, Meta
+> rechaza el envío y el bot loguea el error sin romper el pedido.
 
 ### ordenaapp-business
 
@@ -162,10 +172,19 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 11. **Contadores**: tras 1-2 pedidos, el dashboard del hub muestra pedidos/ventas y `hubs.usageMetrics.ordersCurrentMonth` incrementó en Mongo.
 12. **Aislamiento negativo**: con el token del viewer, llamar `GET /api/hubs/me/orders?businessId=<negocio ajeno>` → 403.
 
+### F3 v1 — avisos y privacidad
+
+13. **Número del repartidor**: en *Ajustes* del hub-admin, poner el WhatsApp del repartidor (con código de país). En un negocio SaaS/WL normal, el mismo campo vive en *Ajustes → General → Delivery propio* (ahí es por negocio, no por hub).
+14. **Aviso al repartidor**: abrir un pedido en *Pedidos* del hub → "Notificar a repartidor". ✅ llega el WhatsApp con el pedido completo y la línea de cobro (`COBRAR X` si es contra entrega, `Ya pagado` si no). El botón queda deshabilitado como "Repartidor ya notificado".
+15. **Envío único**: recargar y volver a intentar desde otra pestaña → el backend responde 409 y la UI se sincroniza sin mandar un segundo mensaje (el costo por mensaje es la razón del candado). En Mongo, `orders.delivery_notified_at` quedó sellado.
+16. **Aviso al hub**: hacer un pedido nuevo en el storefront del hub → llega el WhatsApp al número del hub (`pedido_hub_es`, dice de qué negocio es).
+    > ⚠️ El aviso al **negocio** (`pedido_negocio_hub_es`) está detrás de un `if (STAGE === 'production')` **preexistente** en orders — aplica a todos los pedidos, no solo a los del hub. En staging no va a llegar salvo que pongas `STAGE=production` en el orders de staging (ojo: eso también activa el resto de avisos productivos). El de repartidor y el del hub SÍ salen en staging.
+17. **Privacidad**: en *Ajustes* del hub, apagar "teléfono del cliente" y "dirección" → hacer otro pedido. ✅ el WhatsApp del negocio muestra esos campos como `—`, y en el Portal Business el pedido llega **sin** esos datos (verificar en la respuesta de red, no solo en pantalla: el filtro es server-side).
+
 ---
 
 ## 7. Pendientes después de staging (recordatorio)
 
-- **F3**: planes `hub_*` en Stripe + webhook → ms hubs, límites activos, reportes hub en ms-reportes.
-- **WhatsApp al hub**: crear plantilla Meta y conectar la notificación por pedido.
+- **F3 v2 (comercial)**: planes `hub_*` en Stripe + webhook → ms hubs, límites del plan como fuente de verdad, cobro por excedente sin bloquear, reportes de hub en ms-reportes.
+- **Plantillas en Meta**: las tres de F3 v1 tienen que estar aprobadas como **Utility** antes del smoke test 14-17.
 - **F4**: dominio custom del hub, visibilidad configurable, conectar negocios Ordena existentes, estado de cuenta/liquidaciones.
