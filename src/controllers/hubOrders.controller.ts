@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import hubModel from "../models/hubModel";
-import { getHubOrders, getHubOrdersSummary, updateHubOrderStatus } from "../services/ordersService.external";
+import { getHubOrders, getHubOrdersSummary, updateHubOrderStatus, notifyDeliveryPersonExternal } from "../services/ordersService.external";
 import { getBusinessesByHubId, assertBusinessBelongsToHub } from "../services/businessService.external";
 import { resolveScopedBusinessId } from "../utils/auth";
 
@@ -193,5 +193,37 @@ export async function getMyHubDashboard(req: Request, res: Response): Promise<Re
         });
     } catch (error: any) {
         return upstreamError(res, error, "cargar el dashboard");
+    }
+}
+
+
+/**
+ * POST /api/hubs/me/orders/:orderId/notify-delivery
+ * El operador avisa a SU repartidor. Un BUSINESS_VIEWER no puede: el delivery
+ * del hub lo coordina el operador, no cada negocio.
+ */
+export async function notifyDeliveryForMyHubOrder(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const orderId = String(req.params.orderId);
+        const { businessId } = req.body || {};
+        if (!businessId) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "businessId es requerido",
+                data: {},
+            });
+        }
+        // El pedido debe ser de un negocio de ESTE hub.
+        await assertBusinessBelongsToHub(ctx.hubId, String(businessId));
+        const resp = await notifyDeliveryPersonExternal(String(businessId), orderId);
+        return res.status(200).json(resp);
+    } catch (error: any) {
+        const st = error?.response?.status;
+        if (st && st >= 400 && st < 500 && error?.response?.data) {
+            return res.status(st).json(error.response.data);
+        }
+        return upstreamError(res, error, "avisar al repartidor");
     }
 }

@@ -16,6 +16,7 @@ exports.getMyHubOrders = getMyHubOrders;
 exports.updateMyHubOrderStatus = updateMyHubOrderStatus;
 exports.getMyBusinessPortalSummary = getMyBusinessPortalSummary;
 exports.getMyHubDashboard = getMyHubDashboard;
+exports.notifyDeliveryForMyHubOrder = notifyDeliveryForMyHubOrder;
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const ordersService_external_1 = require("../services/ordersService.external");
 const businessService_external_1 = require("../services/businessService.external");
@@ -207,6 +208,40 @@ function getMyHubDashboard(req, res) {
         }
         catch (error) {
             return upstreamError(res, error, "cargar el dashboard");
+        }
+    });
+}
+/**
+ * POST /api/hubs/me/orders/:orderId/notify-delivery
+ * El operador avisa a SU repartidor. Un BUSINESS_VIEWER no puede: el delivery
+ * del hub lo coordina el operador, no cada negocio.
+ */
+function notifyDeliveryForMyHubOrder(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
+        const ctx = req.hubContext;
+        try {
+            const orderId = String(req.params.orderId);
+            const { businessId } = req.body || {};
+            if (!businessId) {
+                return res.status(400).json({
+                    status: false,
+                    statusCode: 400,
+                    message: "businessId es requerido",
+                    data: {},
+                });
+            }
+            // El pedido debe ser de un negocio de ESTE hub.
+            yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, String(businessId));
+            const resp = yield (0, ordersService_external_1.notifyDeliveryPersonExternal)(String(businessId), orderId);
+            return res.status(200).json(resp);
+        }
+        catch (error) {
+            const st = (_a = error === null || error === void 0 ? void 0 : error.response) === null || _a === void 0 ? void 0 : _a.status;
+            if (st && st >= 400 && st < 500 && ((_b = error === null || error === void 0 ? void 0 : error.response) === null || _b === void 0 ? void 0 : _b.data)) {
+                return res.status(st).json(error.response.data);
+            }
+            return upstreamError(res, error, "avisar al repartidor");
         }
     });
 }

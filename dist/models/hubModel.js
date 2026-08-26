@@ -16,6 +16,10 @@ const contactSchema = new mongoose_1.Schema({
     // Número que recibe la notificación general de cada pedido del hub
     // (adicional a la notificación que recibe el negocio correspondiente).
     whatsapp: { type: String },
+    // Repartidor del hub (F3): el operador hace el delivery de TODOS sus
+    // negocios, así que el número vive aquí y no se repite por negocio.
+    // Recibe el aviso al pulsar "Notificar a repartidor" en un pedido.
+    deliveryWhatsapp: { type: String },
     website: { type: String },
     instagram: { type: String },
     facebook: { type: String },

@@ -6,6 +6,8 @@ const auth_1 = require("../utils/auth");
 const router = (0, express_1.Router)();
 // Interna (orders-service): contador de pedidos del hub
 router.patch("/internal/:hubId/usage/increment-order", hubs_controller_1.incrementHubOrderUsage);
+// Interna (orders): a quién avisar por WhatsApp y qué ve el negocio
+router.get("/internal/:hubId/notification-config", hubs_controller_1.getHubNotificationConfig);
 // Pública: resolución de {slug}.ordena.app para middleware/storefront
 router.get("/resolve", hubs_controller_1.resolveHubBySlug);
 // Protegidas

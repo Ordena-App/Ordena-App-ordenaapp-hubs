@@ -16,6 +16,7 @@ exports.resolveHubBySlug = resolveHubBySlug;
 exports.getMyHub = getMyHub;
 exports.updateMyHub = updateMyHub;
 exports.incrementHubOrderUsage = incrementHubOrderUsage;
+exports.getHubNotificationConfig = getHubNotificationConfig;
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const hubCategoryModel_1 = __importDefault(require("../models/hubCategoryModel"));
 const config_1 = require("../config/config");
@@ -77,7 +78,7 @@ function getMyHub(req, res) {
             // El Portal Business solo necesita identidad y branding del hub: nunca
             // su suscripción, límites ni métricas de uso (información del operador).
             const projection = ctx.role === "BUSINESS_VIEWER"
-                ? "name slug logo favicon branding contact timezone country currency language"
+                ? "name slug logo favicon branding timezone country currency language"
                 : undefined;
             const query = hubModel_1.default.findById(ctx.hubId);
             const hub = projection ? yield query.select(projection) : yield query;
@@ -125,10 +126,24 @@ function updateMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const ctx = req.hubContext;
+            // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
+            // claves ya no borra las demás (antes el $set del objeto entero se
+            // llevaba por delante deliveryWhatsapp, email, tiktok…).
+            const NESTED = new Set(["branding", "contact", "businessVisibility"]);
             const patch = {};
             for (const field of UPDATABLE_FIELDS) {
-                if (req.body && req.body[field] !== undefined)
-                    patch[field] = req.body[field];
+                const value = req.body ? req.body[field] : undefined;
+                if (value === undefined)
+                    continue;
+                if (NESTED.has(field) && value && typeof value === "object" && !Array.isArray(value)) {
+                    for (const [key, inner] of Object.entries(value)) {
+                        if (inner !== undefined)
+                            patch[`${field}.${key}`] = inner;
+                    }
+                }
+                else {
+                    patch[field] = value;
+                }
             }
             if (Object.keys(patch).length === 0) {
                 return res.status(400).json({
@@ -159,13 +174,14 @@ function updateMyHub(req, res) {
     });
 }
 // ────────────────────────────────────────────────────────────────────────────
-// Interno server-to-server (orders-service): contador de pedidos del hub.
-// Guardado por INTERNAL_SHARED_SECRET (header x-ordena-secret; compat: si la
-// env no está configurada, se acepta sin header — mismo patrón del bot).
+// Endpoints internos server-to-server (orders-service).
+// FAIL-CLOSED: sin el secreto configurado se rechaza todo — igual que los
+// guards de business/orders/products. Estos endpoints exponen los teléfonos
+// del operador y del repartidor, y mutan contadores de facturación.
 // ────────────────────────────────────────────────────────────────────────────
 function isValidInternalCall(req) {
     if (!config_1.INTERNAL_SHARED_SECRET)
-        return true;
+        return false;
     const header = (req.headers["x-ordena-secret"] || req.headers["X-Ordena-Secret"]);
     return header === config_1.INTERNAL_SHARED_SECRET;
 }
@@ -236,6 +252,57 @@ function incrementHubOrderUsage(req, res) {
                 statusCode: 500,
                 message: "Error interno del servidor",
                 data: { error: error instanceof Error ? error.message : error },
+            });
+        }
+    });
+}
+/**
+ * GET /api/hubs/internal/:hubId/notification-config  (interno, orders)
+ * Datos que orders necesita para las plantillas de WhatsApp del hub:
+ * a quién avisar y qué información puede ver el negocio.
+ */
+function getHubNotificationConfig(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
+        try {
+            if (!isValidInternalCall(req)) {
+                return res.status(403).json({
+                    status: false,
+                    statusCode: 403,
+                    message: "Llamada interna no autorizada",
+                    data: {},
+                });
+            }
+            const hub = yield hubModel_1.default
+                .findById(String(req.params.hubId))
+                .select("name contact businessVisibility");
+            if (!hub) {
+                return res.status(404).json({
+                    status: false,
+                    statusCode: 404,
+                    message: "Hub no encontrado",
+                    data: {},
+                });
+            }
+            return res.status(200).json({
+                status: true,
+                statusCode: 200,
+                message: "Configuración de notificaciones",
+                data: {
+                    hubName: hub.name,
+                    hubWhatsapp: ((_a = hub.contact) === null || _a === void 0 ? void 0 : _a.whatsapp) || null,
+                    deliveryWhatsapp: ((_b = hub.contact) === null || _b === void 0 ? void 0 : _b.deliveryWhatsapp) || null,
+                    businessVisibility: hub.businessVisibility,
+                },
+            });
+        }
+        catch (error) {
+            console.error("Error leyendo configuración de notificaciones:", error);
+            return res.status(500).json({
+                status: false,
+                statusCode: 500,
+                message: "Error interno del servidor",
+                data: {},
             });
         }
     });

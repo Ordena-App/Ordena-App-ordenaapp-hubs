@@ -62,7 +62,7 @@ export async function getMyHub(req: Request, res: Response): Promise<Response> {
         // su suscripción, límites ni métricas de uso (información del operador).
         const projection =
             ctx.role === "BUSINESS_VIEWER"
-                ? "name slug logo favicon branding contact timezone country currency language"
+                ? "name slug logo favicon branding timezone country currency language"
                 : undefined;
         const query = hubModel.findById(ctx.hubId);
         const hub = projection ? await query.select(projection) : await query;
@@ -109,9 +109,21 @@ const UPDATABLE_FIELDS = [
 export async function updateMyHub(req: Request, res: Response): Promise<Response> {
     try {
         const ctx = req.hubContext!;
+        // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
+        // claves ya no borra las demás (antes el $set del objeto entero se
+        // llevaba por delante deliveryWhatsapp, email, tiktok…).
+        const NESTED = new Set(["branding", "contact", "businessVisibility"]);
         const patch: Record<string, unknown> = {};
         for (const field of UPDATABLE_FIELDS) {
-            if (req.body && req.body[field] !== undefined) patch[field] = req.body[field];
+            const value = req.body ? req.body[field] : undefined;
+            if (value === undefined) continue;
+            if (NESTED.has(field) && value && typeof value === "object" && !Array.isArray(value)) {
+                for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+                    if (inner !== undefined) patch[`${field}.${key}`] = inner;
+                }
+            } else {
+                patch[field] = value;
+            }
         }
         if (Object.keys(patch).length === 0) {
             return res.status(400).json({
@@ -142,13 +154,14 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Interno server-to-server (orders-service): contador de pedidos del hub.
-// Guardado por INTERNAL_SHARED_SECRET (header x-ordena-secret; compat: si la
-// env no está configurada, se acepta sin header — mismo patrón del bot).
+// Endpoints internos server-to-server (orders-service).
+// FAIL-CLOSED: sin el secreto configurado se rechaza todo — igual que los
+// guards de business/orders/products. Estos endpoints exponen los teléfonos
+// del operador y del repartidor, y mutan contadores de facturación.
 // ────────────────────────────────────────────────────────────────────────────
 
 function isValidInternalCall(req: Request): boolean {
-    if (!INTERNAL_SHARED_SECRET) return true;
+    if (!INTERNAL_SHARED_SECRET) return false;
     const header = (req.headers["x-ordena-secret"] || req.headers["X-Ordena-Secret"]) as string | undefined;
     return header === INTERNAL_SHARED_SECRET;
 }
@@ -231,6 +244,55 @@ export async function incrementHubOrderUsage(req: Request, res: Response): Promi
             statusCode: 500,
             message: "Error interno del servidor",
             data: { error: error instanceof Error ? error.message : error },
+        });
+    }
+}
+
+
+/**
+ * GET /api/hubs/internal/:hubId/notification-config  (interno, orders)
+ * Datos que orders necesita para las plantillas de WhatsApp del hub:
+ * a quién avisar y qué información puede ver el negocio.
+ */
+export async function getHubNotificationConfig(req: Request, res: Response): Promise<Response> {
+    try {
+        if (!isValidInternalCall(req)) {
+            return res.status(403).json({
+                status: false,
+                statusCode: 403,
+                message: "Llamada interna no autorizada",
+                data: {},
+            });
+        }
+        const hub = await hubModel
+            .findById(String(req.params.hubId))
+            .select("name contact businessVisibility");
+        if (!hub) {
+            return res.status(404).json({
+                status: false,
+                statusCode: 404,
+                message: "Hub no encontrado",
+                data: {},
+            });
+        }
+        return res.status(200).json({
+            status: true,
+            statusCode: 200,
+            message: "Configuración de notificaciones",
+            data: {
+                hubName: hub.name,
+                hubWhatsapp: hub.contact?.whatsapp || null,
+                deliveryWhatsapp: hub.contact?.deliveryWhatsapp || null,
+                businessVisibility: hub.businessVisibility,
+            },
+        });
+    } catch (error) {
+        console.error("Error leyendo configuración de notificaciones:", error);
+        return res.status(500).json({
+            status: false,
+            statusCode: 500,
+            message: "Error interno del servidor",
+            data: {},
         });
     }
 }

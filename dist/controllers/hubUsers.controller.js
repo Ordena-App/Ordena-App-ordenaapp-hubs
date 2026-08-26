@@ -145,7 +145,13 @@ function loginHubUser(req, res) {
                     data: {},
                 });
             }
-            const hub = yield hubModel_1.default.findById(user.hub_id);
+            // El Portal Business solo necesita identidad y branding: sin proyección,
+            // el snapshot del login le entregaba suscripción, límites, métricas y el
+            // WhatsApp del repartidor, y encima se cachea en su localStorage.
+            const hubQuery = hubModel_1.default.findById(user.hub_id);
+            const hub = user.role === "BUSINESS_VIEWER"
+                ? yield hubQuery.select("name slug logo favicon branding timezone country currency language status")
+                : yield hubQuery;
             if (!hub || hub.status !== "ACTIVE") {
                 return res.status(403).json({
                     status: false,
