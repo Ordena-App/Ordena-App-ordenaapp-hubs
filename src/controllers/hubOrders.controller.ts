@@ -19,6 +19,35 @@ function upstreamError(res: Response, error: any, action: string): Response {
 }
 
 /**
+ * Matriz de privacidad del hub aplicada a los pedidos que ve un negocio.
+ *
+ * El operador decide qué datos del cliente final comparte (hub.businessVisibility).
+ * El filtrado es SERVER-SIDE a propósito: hacerlo en el cliente sería cosmético
+ * — el payload viajaría igual y quedaría en su localStorage.
+ *
+ * `customer_email` no está en la matriz de tres campos pero es un canal de
+ * contacto directo, así que sigue la misma regla que el teléfono.
+ */
+function stripOrderPII(
+    order: Record<string, unknown>,
+    visibility: { customerName: boolean; customerPhone: boolean; customerAddress: boolean }
+): Record<string, unknown> {
+    const clean = { ...order };
+    if (!visibility.customerName) clean.customer_name = null;
+    if (!visibility.customerPhone) {
+        clean.customer_number = null;
+        clean.customer_email = null;
+    }
+    if (!visibility.customerAddress) {
+        clean.delivery_address = null;
+        clean.delivery_city = null;
+        clean.delivery_department = null;
+        clean.delivery_reference = null;
+    }
+    return clean;
+}
+
+/**
  * GET /api/hubs/me/orders — pedidos consolidados del hub.
  * Filtros: businessId, status, from, to, page, limit.
  * BUSINESS_VIEWER queda SIEMPRE limitado a su negocio (scope del token).
@@ -45,6 +74,23 @@ export async function getMyHubOrders(req: Request, res: Response): Promise<Respo
             from: typeof req.query.from === "string" ? req.query.from : undefined,
             to: typeof req.query.to === "string" ? req.query.to : undefined,
         });
+
+        // El Portal Business solo recibe los datos del cliente que el hub decide
+        // compartir. Los roles del hub ven todo (son los dueños de la operación).
+        if (ctx.role === "BUSINESS_VIEWER") {
+            const hub = await hubModel.findById(ctx.hubId).select("businessVisibility");
+            const visibility = {
+                customerName: hub?.businessVisibility?.customerName !== false,
+                customerPhone: hub?.businessVisibility?.customerPhone === true,
+                customerAddress: hub?.businessVisibility?.customerAddress === true,
+            };
+            const orders = Array.isArray(resp?.data?.orders) ? resp.data.orders : [];
+            return res.status(200).json({
+                ...resp,
+                data: { ...resp.data, orders: orders.map((o: any) => stripOrderPII(o, visibility)) },
+            });
+        }
+
         return res.status(200).json(resp);
     } catch (error: any) {
         return upstreamError(res, error, "listar los pedidos");
