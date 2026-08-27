@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { resolveHubBySlug, getMyHub, updateMyHub, incrementHubOrderUsage, getHubNotificationConfig } from "../controllers/hubs.controller";
+import { resolveHubBySlug, resolveHubStore, getMyHub, updateMyHub, incrementHubOrderUsage, getHubNotificationConfig } from "../controllers/hubs.controller";
 import { verifyHubJWT, requireHubRole } from "../utils/auth";
 
 const router = Router();
@@ -11,6 +11,8 @@ router.get("/internal/:hubId/notification-config", getHubNotificationConfig);
 
 // Pública: resolución de {slug}.ordena.app para middleware/storefront
 router.get("/resolve", resolveHubBySlug);
+// Pública: ¿este store_link namespaceado es de un hub? (redirect 301 en hosts core)
+router.get("/resolve-store", resolveHubStore);
 
 // Protegidas
 router.get("/me", verifyHubJWT, getMyHub);

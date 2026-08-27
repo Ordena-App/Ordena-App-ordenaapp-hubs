@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import hubModel from "../models/hubModel";
 import hubCategoryModel from "../models/hubCategoryModel";
 import { INTERNAL_SHARED_SECRET } from "../config/config";
@@ -55,6 +56,71 @@ export async function resolveHubBySlug(req: Request, res: Response): Promise<Res
 }
 
 /** GET /api/hubs/me — hub del usuario autenticado. */
+/**
+ * GET /api/hubs/resolve-store?storeLink=pizzeria--ab12cd
+ * PÚBLICO — lo consume el middleware del frontend en hosts core (ordena.app):
+ * si un visitante abre la URL namespaceada de un negocio de hub SIN contexto
+ * de hub (enlace compartido, resultado de Google), el middleware redirige 301
+ * al subdominio del hub para que el checkout use los métodos del HUB y el SEO
+ * no duplique contenido. Lee la colección businesses de la shared DB (mismo
+ * patrón que payments/isHubKey).
+ */
+export async function resolveHubStore(req: Request, res: Response): Promise<Response> {
+    try {
+        const storeLink = String(req.query.storeLink || "").trim().toLowerCase();
+        // Solo aplica a store_links namespaceados de hub: {slug}--{6 hex}
+        if (!/^[a-z0-9][a-z0-9-]*--[0-9a-f]{6}$/.test(storeLink)) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "storeLink inválido",
+                data: {},
+            });
+        }
+
+        const db = mongoose.connection.db;
+        const biz = db
+            ? await db.collection("businesses").findOne(
+                  { store_link: storeLink, context: "HUB_MANAGED" },
+                  { projection: { hubId: 1, hubSlug: 1 } }
+              )
+            : null;
+        if (!biz?.hubId) {
+            return res.status(404).json({
+                status: false,
+                statusCode: 404,
+                message: "No es un negocio de hub",
+                data: {},
+            });
+        }
+
+        const hub = await hubModel.findOne({ _id: biz.hubId, status: "ACTIVE" }).select("slug");
+        if (!hub?.slug) {
+            return res.status(404).json({
+                status: false,
+                statusCode: 404,
+                message: "Hub no disponible",
+                data: {},
+            });
+        }
+
+        return res.status(200).json({
+            status: true,
+            statusCode: 200,
+            message: "Negocio de hub resuelto",
+            data: { hubSlug: hub.slug, businessSlug: biz.hubSlug || null },
+        });
+    } catch (error) {
+        console.error("Error en resolveHubStore:", error);
+        return res.status(500).json({
+            status: false,
+            statusCode: 500,
+            message: "Error interno del servidor",
+            data: {},
+        });
+    }
+}
+
 export async function getMyHub(req: Request, res: Response): Promise<Response> {
     try {
         const ctx = req.hubContext!;

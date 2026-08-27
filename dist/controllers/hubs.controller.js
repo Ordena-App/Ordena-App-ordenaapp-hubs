@@ -13,10 +13,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveHubBySlug = resolveHubBySlug;
+exports.resolveHubStore = resolveHubStore;
 exports.getMyHub = getMyHub;
 exports.updateMyHub = updateMyHub;
 exports.incrementHubOrderUsage = incrementHubOrderUsage;
 exports.getHubNotificationConfig = getHubNotificationConfig;
+const mongoose_1 = __importDefault(require("mongoose"));
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const hubCategoryModel_1 = __importDefault(require("../models/hubCategoryModel"));
 const config_1 = require("../config/config");
@@ -71,6 +73,67 @@ function resolveHubBySlug(req, res) {
     });
 }
 /** GET /api/hubs/me — hub del usuario autenticado. */
+/**
+ * GET /api/hubs/resolve-store?storeLink=pizzeria--ab12cd
+ * PÚBLICO — lo consume el middleware del frontend en hosts core (ordena.app):
+ * si un visitante abre la URL namespaceada de un negocio de hub SIN contexto
+ * de hub (enlace compartido, resultado de Google), el middleware redirige 301
+ * al subdominio del hub para que el checkout use los métodos del HUB y el SEO
+ * no duplique contenido. Lee la colección businesses de la shared DB (mismo
+ * patrón que payments/isHubKey).
+ */
+function resolveHubStore(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const storeLink = String(req.query.storeLink || "").trim().toLowerCase();
+            // Solo aplica a store_links namespaceados de hub: {slug}--{6 hex}
+            if (!/^[a-z0-9][a-z0-9-]*--[0-9a-f]{6}$/.test(storeLink)) {
+                return res.status(400).json({
+                    status: false,
+                    statusCode: 400,
+                    message: "storeLink inválido",
+                    data: {},
+                });
+            }
+            const db = mongoose_1.default.connection.db;
+            const biz = db
+                ? yield db.collection("businesses").findOne({ store_link: storeLink, context: "HUB_MANAGED" }, { projection: { hubId: 1, hubSlug: 1 } })
+                : null;
+            if (!(biz === null || biz === void 0 ? void 0 : biz.hubId)) {
+                return res.status(404).json({
+                    status: false,
+                    statusCode: 404,
+                    message: "No es un negocio de hub",
+                    data: {},
+                });
+            }
+            const hub = yield hubModel_1.default.findOne({ _id: biz.hubId, status: "ACTIVE" }).select("slug");
+            if (!(hub === null || hub === void 0 ? void 0 : hub.slug)) {
+                return res.status(404).json({
+                    status: false,
+                    statusCode: 404,
+                    message: "Hub no disponible",
+                    data: {},
+                });
+            }
+            return res.status(200).json({
+                status: true,
+                statusCode: 200,
+                message: "Negocio de hub resuelto",
+                data: { hubSlug: hub.slug, businessSlug: biz.hubSlug || null },
+            });
+        }
+        catch (error) {
+            console.error("Error en resolveHubStore:", error);
+            return res.status(500).json({
+                status: false,
+                statusCode: 500,
+                message: "Error interno del servidor",
+                data: {},
+            });
+        }
+    });
+}
 function getMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         try {

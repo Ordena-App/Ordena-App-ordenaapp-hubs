@@ -10,6 +10,8 @@ router.patch("/internal/:hubId/usage/increment-order", hubs_controller_1.increme
 router.get("/internal/:hubId/notification-config", hubs_controller_1.getHubNotificationConfig);
 // Pública: resolución de {slug}.ordena.app para middleware/storefront
 router.get("/resolve", hubs_controller_1.resolveHubBySlug);
+// Pública: ¿este store_link namespaceado es de un hub? (redirect 301 en hosts core)
+router.get("/resolve-store", hubs_controller_1.resolveHubStore);
 // Protegidas
 router.get("/me", auth_1.verifyHubJWT, hubs_controller_1.getMyHub);
 router.put("/me", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubs_controller_1.updateMyHub);
