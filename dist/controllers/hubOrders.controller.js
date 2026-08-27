@@ -47,19 +47,50 @@ function upstreamError(res, error, action) {
  */
 function stripOrderPII(order, visibility) {
     const clean = Object.assign({}, order);
-    if (!visibility.customerName)
+    // El WhatsApp del repartidor del hub es interno del operador: el negocio
+    // nunca debe verlo, sin importar la matriz de privacidad.
+    clean.delivery_notified_to = null;
+    const shipTo = Object.assign({}, order.ship_to);
+    const payment = Object.assign({}, order.payment);
+    if (!visibility.customerName) {
         clean.customer_name = null;
+        shipTo.name = null;
+    }
     if (!visibility.customerPhone) {
         clean.customer_number = null;
         clean.customer_email = null;
+        // payer_email del pago es otro canal de contacto directo.
+        payment.payer_email = null;
     }
     if (!visibility.customerAddress) {
         clean.delivery_address = null;
         clean.delivery_city = null;
         clean.delivery_department = null;
         clean.delivery_reference = null;
+        // ship_to lleva la misma direccion por otro camino.
+        shipTo.address_line1 = null;
+        shipTo.city_locality = null;
+        shipTo.state_province = null;
+        shipTo.postal_code = null;
     }
+    if (order.ship_to)
+        clean.ship_to = shipTo;
+    if (order.payment)
+        clean.payment = payment;
     return clean;
+}
+/** Lee la matriz de privacidad del hub con los defaults fail-safe (nombre sí,
+ *  teléfono y dirección no). Compartida por el listado y el PATCH de estado. */
+function readHubVisibility(hubId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c;
+        const hub = yield hubModel_1.default.findById(hubId).select("businessVisibility");
+        return {
+            customerName: ((_a = hub === null || hub === void 0 ? void 0 : hub.businessVisibility) === null || _a === void 0 ? void 0 : _a.customerName) !== false,
+            customerPhone: ((_b = hub === null || hub === void 0 ? void 0 : hub.businessVisibility) === null || _b === void 0 ? void 0 : _b.customerPhone) === true,
+            customerAddress: ((_c = hub === null || hub === void 0 ? void 0 : hub.businessVisibility) === null || _c === void 0 ? void 0 : _c.customerAddress) === true,
+        };
+    });
 }
 /**
  * GET /api/hubs/me/orders — pedidos consolidados del hub.
@@ -68,7 +99,7 @@ function stripOrderPII(order, visibility) {
  */
 function getMyHubOrders(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d;
+        var _a;
         const ctx = req.hubContext;
         try {
             const requested = typeof req.query.businessId === "string" ? req.query.businessId : undefined;
@@ -92,13 +123,8 @@ function getMyHubOrders(req, res) {
             // El Portal Business solo recibe los datos del cliente que el hub decide
             // compartir. Los roles del hub ven todo (son los dueños de la operación).
             if (ctx.role === "BUSINESS_VIEWER") {
-                const hub = yield hubModel_1.default.findById(ctx.hubId).select("businessVisibility");
-                const visibility = {
-                    customerName: ((_a = hub === null || hub === void 0 ? void 0 : hub.businessVisibility) === null || _a === void 0 ? void 0 : _a.customerName) !== false,
-                    customerPhone: ((_b = hub === null || hub === void 0 ? void 0 : hub.businessVisibility) === null || _b === void 0 ? void 0 : _b.customerPhone) === true,
-                    customerAddress: ((_c = hub === null || hub === void 0 ? void 0 : hub.businessVisibility) === null || _c === void 0 ? void 0 : _c.customerAddress) === true,
-                };
-                const orders = Array.isArray((_d = resp === null || resp === void 0 ? void 0 : resp.data) === null || _d === void 0 ? void 0 : _d.orders) ? resp.data.orders : [];
+                const visibility = yield readHubVisibility(ctx.hubId);
+                const orders = Array.isArray((_a = resp === null || resp === void 0 ? void 0 : resp.data) === null || _a === void 0 ? void 0 : _a.orders) ? resp.data.orders : [];
                 return res.status(200).json(Object.assign(Object.assign({}, resp), { data: Object.assign(Object.assign({}, resp.data), { orders: orders.map((o) => stripOrderPII(o, visibility)) }) }));
             }
             return res.status(200).json(resp);
@@ -116,6 +142,7 @@ function getMyHubOrders(req, res) {
  */
 function updateMyHubOrderStatus(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
         const ctx = req.hubContext;
         try {
             const orderId = String(req.params.orderId);
@@ -134,6 +161,12 @@ function updateMyHubOrderStatus(req, res) {
                 payment_status,
                 businessId: scopedBusinessId,
             });
+            // El pedido de vuelta también respeta la matriz: si no, un BUSINESS_VIEWER
+            // recupera nombre/teléfono/dirección con solo cambiar el estado.
+            if (ctx.role === "BUSINESS_VIEWER" && ((_a = resp === null || resp === void 0 ? void 0 : resp.data) === null || _a === void 0 ? void 0 : _a.order)) {
+                const visibility = yield readHubVisibility(ctx.hubId);
+                resp.data.order = stripOrderPII(resp.data.order, visibility);
+            }
             return res.status(200).json(resp);
         }
         catch (error) {

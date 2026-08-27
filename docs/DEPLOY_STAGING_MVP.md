@@ -90,7 +90,7 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 | `BUSINESS_SERVICE_LINK` | `http://<business-staging>:3002/api` | Con `/api` al final |
 | `ORDERS_SERVICE_LINK` | `http://<orders-staging>:3005/api` | |
 | `PAYMENTS_SERVICE_LINK` | `http://<payments-staging>:3006/api` | |
-| `PRODUCTS_SERVICE_LINK` | `http://<products-staging>:3004/api` | Reservado (tagging de categorías) |
+| `PRODUCTS_SERVICE_LINK` | `http://<products-staging>:3004/api` | **Obligatoria** — CRUD de productos del hub + tagging de categorías |
 | `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` | **Obligatorio.** Manda `x-ordena-secret` a business/orders/products Y valida el que le manda orders. (También se acepta `INTERNAL_SHARED_SECRET` por compat.) |
 
 ### ordenaapp-api-gateway
@@ -98,6 +98,7 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 | Env | Valor staging |
 |---|---|
 | `HUBS_SERVICE_URL` | `http://<hubs-staging>:3013/api` |
+| `NODE_ENV` | `production` — sin esto, el gateway trata `*.localhost` como origen confiable |
 
 ### ordenaapp-orders
 

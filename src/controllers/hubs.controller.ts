@@ -22,7 +22,7 @@ export async function resolveHubBySlug(req: Request, res: Response): Promise<Res
 
         const hub = await hubModel
             .findOne({ slug, status: "ACTIVE" })
-            .select("name slug description logo favicon branding contact timezone country currency language domain status");
+            .select("name slug description logo favicon branding contact.whatsapp contact.instagram contact.facebook contact.tiktok contact.website timezone country currency language domain status");
         if (!hub) {
             return res.status(404).json({
                 status: false,
