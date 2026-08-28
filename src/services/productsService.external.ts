@@ -48,13 +48,9 @@ export async function createBusinessProduct(
     const url = `${PRODUCTS_SERVICE_LINK}/product`;
     const cfg = { timeout: 30000, headers: headers(businessId) };
 
-    if (files.length === 0) {
-        // Sin imágenes: JSON directo (multer del upstream ignora bodies no-multipart)
-        const { data } = await axios.post(url, { ...fields, businessId }, cfg);
-        return data;
-    }
-
-    // Con imágenes: FormData nativo de Node (>=18) — axios setea el boundary.
+    // SIEMPRE multipart: es la única ruta que el dashboard clásico ejercita en
+    // el upstream (multer + campos string). La variante JSON quedaba sin probar
+    // y se comportaba distinto con los campos JSON-string (variants, options…).
     const FormDataCtor: any = (globalThis as any).FormData;
     if (!FormDataCtor) {
         throw new Error("Node >= 18 requerido para subir imágenes (FormData nativo)");
@@ -81,14 +77,11 @@ export async function updateBusinessProduct(
 ) {
     const url = `${PRODUCTS_SERVICE_LINK}/product/${productId}`;
     const cfg = { timeout: 30000, headers: headers(businessId) };
-    if (files.length === 0) {
-        const { data } = await axios.patch(url, patch, cfg);
-        return data;
-    }
-    // Con imágenes nuevas: el upstream espera multipart con campo 'newImages'.
+    // SIEMPRE multipart (misma razón que en create): paridad exacta con la
+    // ruta del dashboard clásico. El upstream parsea los campos como strings.
     const FormDataCtor: any = (globalThis as any).FormData;
     if (!FormDataCtor) {
-        throw new Error("Node >= 18 requerido para subir imágenes (FormData nativo)");
+        throw new Error("Node >= 18 requerido (FormData nativo)");
     }
     const fd = new FormDataCtor();
     for (const [key, value] of Object.entries(patch)) {

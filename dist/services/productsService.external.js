@@ -56,12 +56,9 @@ function createBusinessProduct(businessId, fields, files) {
     return __awaiter(this, void 0, void 0, function* () {
         const url = `${config_1.PRODUCTS_SERVICE_LINK}/product`;
         const cfg = { timeout: 30000, headers: headers(businessId) };
-        if (files.length === 0) {
-            // Sin imágenes: JSON directo (multer del upstream ignora bodies no-multipart)
-            const { data } = yield axios_1.default.post(url, Object.assign(Object.assign({}, fields), { businessId }), cfg);
-            return data;
-        }
-        // Con imágenes: FormData nativo de Node (>=18) — axios setea el boundary.
+        // SIEMPRE multipart: es la única ruta que el dashboard clásico ejercita en
+        // el upstream (multer + campos string). La variante JSON quedaba sin probar
+        // y se comportaba distinto con los campos JSON-string (variants, options…).
         const FormDataCtor = globalThis.FormData;
         if (!FormDataCtor) {
             throw new Error("Node >= 18 requerido para subir imágenes (FormData nativo)");
@@ -85,14 +82,11 @@ function updateBusinessProduct(businessId_1, productId_1, patch_1) {
     return __awaiter(this, arguments, void 0, function* (businessId, productId, patch, files = []) {
         const url = `${config_1.PRODUCTS_SERVICE_LINK}/product/${productId}`;
         const cfg = { timeout: 30000, headers: headers(businessId) };
-        if (files.length === 0) {
-            const { data } = yield axios_1.default.patch(url, patch, cfg);
-            return data;
-        }
-        // Con imágenes nuevas: el upstream espera multipart con campo 'newImages'.
+        // SIEMPRE multipart (misma razón que en create): paridad exacta con la
+        // ruta del dashboard clásico. El upstream parsea los campos como strings.
         const FormDataCtor = globalThis.FormData;
         if (!FormDataCtor) {
-            throw new Error("Node >= 18 requerido para subir imágenes (FormData nativo)");
+            throw new Error("Node >= 18 requerido (FormData nativo)");
         }
         const fd = new FormDataCtor();
         for (const [key, value] of Object.entries(patch)) {
