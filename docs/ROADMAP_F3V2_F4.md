@@ -152,7 +152,7 @@ No uses el mecanismo de `COUPON_PRIMER_MES` / `PROMO_PRIMER_MES` (`payments/src/
 
 # F4 — Dominio custom · Negocios existentes · Liquidaciones
 
-Orden recomendado: **liquidaciones → dominio custom → afiliación de negocios existentes.** Las liquidaciones son el mayor valor para Oe Ya con riesgo de plataforma cero; la afiliación va última porque es la única con preguntas de producto y legales sin resolver.
+Orden: **liquidaciones → dominio custom.** (La afiliación de negocios existentes fue DESCARTADA por decisión de producto — ver §C.)
 
 ## A. Estado de cuenta / liquidaciones del hub hacia sus negocios
 
@@ -212,7 +212,12 @@ settlement: { commissionType:'percent'|'fixed'|'none', commissionValue,
 4. `ordenaapp-api-gateway`: **este es el punto que se olvida.** `isOrdenaSubdomainOrigin` (`src/app.ts:84-95`) solo confía en `*.ordena.app`; un `Origin: https://oeya.com` sería rechazado por CORS. `corsOptions` ya es **async** y ya hace una llamada externa (`resolveTenant`, líneas 259-278), así que la solución limpia encaja: agregar un fallback `resolveHubByDomain` cacheado en esa misma función. Para el piloto sirve un `ALLOWED_HUB_ORIGINS` por env; la resolución cacheada es la versión que escala. **El gateway no tiene Mongo** (verificado: `mongoose` no está en su `package.json`), así que no hay atajo por DB.
 5. Cuando `domain.status === 'verified'`, **308 desde `{slug}.ordena.app` al dominio verificado** en el middleware. Si no, el mismo storefront queda indexable en dos hosts.
 
-## C. Conectar negocios Ordena ya existentes a un hub
+## C. Conectar negocios Ordena ya existentes a un hub — ❌ DESCARTADO (27/08/2026)
+
+> **Decisión del usuario:** los negocios del hub NACEN en el hub y son del hub.
+> No existe el caso "negocio Ordena que luego pasa a ser de hub". Todo lo que
+> sigue en esta sección queda como referencia histórica; NO se implementa.
+> F4 queda en dos bloques: Liquidaciones y Dominio custom.
 
 **Recomendación fuerte: no conviertas el `context`. Introduce una afiliación ligera.**
 
