@@ -276,24 +276,30 @@ function incrementHubOrderUsage(req, res) {
                     data: {},
                 });
             }
-            // Rotación mensual (UTC) — idéntico patrón al usageMetrics de business.
+            // Rotación mensual (UTC) — ATÓMICA (F3 v2, base de facturación).
+            // Antes era leer-decidir-escribir: dos pedidos concurrentes en el cambio
+            // de mes podían rotar ambos y el segundo pisaba el incremento del
+            // primero. Ahora un solo updateOne con pipeline, condicionado a que
+            // lastRotatedAt sea anterior al inicio del mes: solo un llamador gana.
             const now = new Date();
-            const last = hub.usageMetrics.lastRotatedAt ? new Date(hub.usageMetrics.lastRotatedAt) : null;
-            const sameMonth = !!last &&
-                last.getUTCFullYear() === now.getUTCFullYear() &&
-                last.getUTCMonth() === now.getUTCMonth();
-            let rotated = false;
-            if (!sameMonth) {
-                yield hubModel_1.default.updateOne({ _id: hubId }, {
+            const monthStartUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+            const rotRes = yield hubModel_1.default.updateOne({
+                _id: hubId,
+                $or: [
+                    { "usageMetrics.lastRotatedAt": { $lt: monthStartUtc } },
+                    { "usageMetrics.lastRotatedAt": null },
+                ],
+            }, [
+                {
                     $set: {
-                        "usageMetrics.ordersPreviousMonth": hub.usageMetrics.ordersCurrentMonth || 0,
+                        "usageMetrics.ordersPreviousMonth": { $ifNull: ["$usageMetrics.ordersCurrentMonth", 0] },
                         "usageMetrics.ordersCurrentMonth": 0,
                         "usageMetrics.extraOrdersCurrentMonth": 0,
-                        "usageMetrics.lastRotatedAt": now,
+                        "usageMetrics.lastRotatedAt": "$$NOW",
                     },
-                });
-                rotated = true;
-            }
+                },
+            ]);
+            const rotated = rotRes.modifiedCount > 0;
             const limit = (_c = (_b = (_a = hub.subscription) === null || _a === void 0 ? void 0 : _a.limits) === null || _b === void 0 ? void 0 : _b.ordersPerMonth) !== null && _c !== void 0 ? _c : -1;
             const updated = yield hubModel_1.default.findByIdAndUpdate(hubId, { $inc: { "usageMetrics.ordersCurrentMonth": 1 }, $set: { updated_at: now } }, { new: true });
             const current = (_d = updated === null || updated === void 0 ? void 0 : updated.usageMetrics.ordersCurrentMonth) !== null && _d !== void 0 ? _d : 0;

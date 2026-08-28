@@ -63,6 +63,9 @@ const subscriptionSchema = new mongoose_1.Schema({
         ordersPerMonth: { type: Number, default: -1 },
         extraBusinessPrice: { type: Number, default: 0 },
         extraOrderPrice: { type: Number, default: 0 },
+        // Freno de emergencia (F3 v2): sobre businessesIncluded se factura
+        // como extra sin bloquear; sobre el hard cap si se bloquea. -1 = sin freno.
+        businessesHardCap: { type: Number, default: -1 },
     },
 }, { _id: false });
 const hubSchema = new mongoose_1.Schema({

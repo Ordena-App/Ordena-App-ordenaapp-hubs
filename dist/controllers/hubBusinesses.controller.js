@@ -71,15 +71,25 @@ function createBusinessForMyHub(req, res) {
                     data: {},
                 });
             }
-            // Límite comercial del plan (businessesIncluded; -1 = ilimitado).
-            const limit = (_c = (_b = (_a = hub.subscription) === null || _a === void 0 ? void 0 : _a.limits) === null || _b === void 0 ? void 0 : _b.businessesIncluded) !== null && _c !== void 0 ? _c : -1;
-            if (limit !== -1 && hub.usageMetrics.businessesCount >= limit) {
+            // Límites del plan (F3 v2: excedente SIN bloquear). Sobre
+            // businessesIncluded se permite y se factura como negocio extra; solo
+            // el hard cap (freno de emergencia contra abuso/mora) bloquea.
+            const limits = ((_a = hub.subscription) === null || _a === void 0 ? void 0 : _a.limits) || {};
+            const included = (_b = limits.businessesIncluded) !== null && _b !== void 0 ? _b : -1;
+            const hardCap = (_c = limits.businessesHardCap) !== null && _c !== void 0 ? _c : -1;
+            const currentCount = hub.usageMetrics.businessesCount || 0;
+            if (hardCap !== -1 && currentCount >= hardCap) {
                 return res.status(403).json({
                     status: false,
                     statusCode: 403,
-                    message: `Alcanzaste el límite de ${limit} negocios de tu plan. Mejora tu plan para agregar más.`,
-                    data: { limit, current: hub.usageMetrics.businessesCount },
+                    message: `Alcanzaste el tope de ${hardCap} negocios. Contáctanos para ampliar tu plan.`,
+                    data: { hardCap, current: currentCount },
                 });
+            }
+            const isExtraBusiness = included !== -1 && currentCount >= included;
+            if (isExtraBusiness) {
+                console.log(`[hub ${ctx.hubId}] negocio extra: ${currentCount + 1} de ${included} incluidos ` +
+                    "(se factura como excedente, no se bloquea)");
             }
             const created = yield (0, businessService_external_1.createHubBusiness)(Object.assign({ hubId: ctx.hubId, name,
                 slug,

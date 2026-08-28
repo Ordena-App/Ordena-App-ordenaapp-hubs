@@ -259,28 +259,33 @@ export async function incrementHubOrderUsage(req: Request, res: Response): Promi
             });
         }
 
-        // Rotación mensual (UTC) — idéntico patrón al usageMetrics de business.
+        // Rotación mensual (UTC) — ATÓMICA (F3 v2, base de facturación).
+        // Antes era leer-decidir-escribir: dos pedidos concurrentes en el cambio
+        // de mes podían rotar ambos y el segundo pisaba el incremento del
+        // primero. Ahora un solo updateOne con pipeline, condicionado a que
+        // lastRotatedAt sea anterior al inicio del mes: solo un llamador gana.
         const now = new Date();
-        const last = hub.usageMetrics.lastRotatedAt ? new Date(hub.usageMetrics.lastRotatedAt) : null;
-        const sameMonth =
-            !!last &&
-            last.getUTCFullYear() === now.getUTCFullYear() &&
-            last.getUTCMonth() === now.getUTCMonth();
-        let rotated = false;
-        if (!sameMonth) {
-            await hubModel.updateOne(
-                { _id: hubId },
+        const monthStartUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        const rotRes = await hubModel.updateOne(
+            {
+                _id: hubId,
+                $or: [
+                    { "usageMetrics.lastRotatedAt": { $lt: monthStartUtc } },
+                    { "usageMetrics.lastRotatedAt": null },
+                ],
+            },
+            [
                 {
                     $set: {
-                        "usageMetrics.ordersPreviousMonth": hub.usageMetrics.ordersCurrentMonth || 0,
+                        "usageMetrics.ordersPreviousMonth": { $ifNull: ["$usageMetrics.ordersCurrentMonth", 0] },
                         "usageMetrics.ordersCurrentMonth": 0,
                         "usageMetrics.extraOrdersCurrentMonth": 0,
-                        "usageMetrics.lastRotatedAt": now,
+                        "usageMetrics.lastRotatedAt": "$$NOW",
                     },
-                }
-            );
-            rotated = true;
-        }
+                },
+            ]
+        );
+        const rotated = rotRes.modifiedCount > 0;
 
         const limit = hub.subscription?.limits?.ordersPerMonth ?? -1;
         const updated = await hubModel.findByIdAndUpdate(

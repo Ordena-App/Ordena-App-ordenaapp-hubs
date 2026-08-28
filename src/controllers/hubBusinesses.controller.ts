@@ -60,15 +60,27 @@ export async function createBusinessForMyHub(req: Request, res: Response): Promi
             });
         }
 
-        // Límite comercial del plan (businessesIncluded; -1 = ilimitado).
-        const limit = hub.subscription?.limits?.businessesIncluded ?? -1;
-        if (limit !== -1 && hub.usageMetrics.businessesCount >= limit) {
+        // Límites del plan (F3 v2: excedente SIN bloquear). Sobre
+        // businessesIncluded se permite y se factura como negocio extra; solo
+        // el hard cap (freno de emergencia contra abuso/mora) bloquea.
+        const limits: any = hub.subscription?.limits || {};
+        const included = limits.businessesIncluded ?? -1;
+        const hardCap = limits.businessesHardCap ?? -1;
+        const currentCount = hub.usageMetrics.businessesCount || 0;
+        if (hardCap !== -1 && currentCount >= hardCap) {
             return res.status(403).json({
                 status: false,
                 statusCode: 403,
-                message: `Alcanzaste el límite de ${limit} negocios de tu plan. Mejora tu plan para agregar más.`,
-                data: { limit, current: hub.usageMetrics.businessesCount },
+                message: `Alcanzaste el tope de ${hardCap} negocios. Contáctanos para ampliar tu plan.`,
+                data: { hardCap, current: currentCount },
             });
+        }
+        const isExtraBusiness = included !== -1 && currentCount >= included;
+        if (isExtraBusiness) {
+            console.log(
+                `[hub ${ctx.hubId}] negocio extra: ${currentCount + 1} de ${included} incluidos ` +
+                "(se factura como excedente, no se bloquea)"
+            );
         }
 
         const created = await createHubBusiness({

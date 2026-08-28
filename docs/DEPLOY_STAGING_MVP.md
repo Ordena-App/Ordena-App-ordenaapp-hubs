@@ -128,7 +128,18 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 |---|---|
 | `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` |
 
-### ordenaapp-payments y ordenaapp-frontend
+### ordenaapp-payments
+
+| Env | Valor staging |
+|---|---|
+| `HUBS_SERVICE_LINK` | `http://<hubs-staging>:3013/api` *(F3 v2)* |
+| `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` *(F3 v2 — mismo valor que los demás)* |
+| `HUB_APP_SUCCESS_URL` | `https://staging.ordena.app/hub-admin/plan?checkout=success` *(F3 v2)* |
+| `HUB_APP_CANCEL_URL` | `https://staging.ordena.app/hub-admin/plan?checkout=cancel` *(F3 v2)* |
+
+> F3 v2 además requiere: correr `npx ts-node src/scripts/seedHubPlans.ts` en hubs (una vez por entorno) y crear los prices en Stripe con lookup keys `hub_*` — checklist completo en `F3V2_BILLING.md`.
+
+### ordenaapp-frontend
 
 **Sin envs nuevas.** (Frontend usa `GENERAL_API_URL` existente; payments solo ganó el fallback `isHubKey` que lee la shared DB.)
 
