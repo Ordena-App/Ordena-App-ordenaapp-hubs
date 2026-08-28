@@ -62,3 +62,14 @@ export async function notifyDeliveryPersonExternal(businessId: string, orderId: 
     );
     return data;
 }
+
+
+/** Lineas de liquidacion (F4): pedidos entregados+pagados del periodo, sin PII. */
+export async function getHubSettlementLines(hubId: string, businessId: string, from: string, to: string) {
+    const { data } = await axios.get(`${ORDERS_SERVICE_LINK}/internal/hub/${hubId}/settlement-lines`, {
+        timeout: 30000,
+        headers: headers(),
+        params: { businessId, from, to },
+    });
+    return data;
+}

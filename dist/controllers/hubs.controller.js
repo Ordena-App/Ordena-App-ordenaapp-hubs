@@ -180,6 +180,8 @@ const UPDATABLE_FIELDS = [
     "favicon",
     "branding",
     "contact",
+    "settlementConfig",
+    "commissionOverrides",
     "timezone",
     "language",
     "businessVisibility",
@@ -192,7 +194,7 @@ function updateMyHub(req, res) {
             // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
             // claves ya no borra las demás (antes el $set del objeto entero se
             // llevaba por delante deliveryWhatsapp, email, tiktok…).
-            const NESTED = new Set(["branding", "contact", "businessVisibility"]);
+            const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig"]);
             const patch = {};
             for (const field of UPDATABLE_FIELDS) {
                 const value = req.body ? req.body[field] : undefined;

@@ -133,3 +133,23 @@ export async function uploadBusinessLogoExternal(
     );
     return data;
 }
+
+
+// ── Dominio custom del hub (F4): proxies de Vercel via business ──
+export async function addHubDomainExternal(domain: string) {
+    const { data } = await axios.post(
+        `${BUSINESS_SERVICE_LINK}/internal/hub-domains`,
+        { domain },
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
+export async function hubDomainStatusExternal(domain: string) {
+    const { data } = await axios.get(`${BUSINESS_SERVICE_LINK}/internal/hub-domains/status`, {
+        timeout: 20000,
+        headers: internalHeaders(),
+        params: { domain },
+    });
+    return data;
+}

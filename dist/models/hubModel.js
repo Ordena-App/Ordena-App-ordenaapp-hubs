@@ -106,6 +106,24 @@ const hubSchema = new mongoose_1.Schema({
         // Reclamo atómico del aviso del 80% (una vez por mes): YYYY-MM ya avisado.
         nudge80MonthKey: { type: String, default: null },
     },
+    // ---- Liquidaciones (F4): comision del hub hacia sus negocios ----
+    // Default del hub + overrides POR NEGOCIO (a unos les cobra mas y a otros
+    // menos — decision de producto). percent = % sobre ventas brutas;
+    // fixed = monto fijo por pedido; none = sin comision.
+    settlementConfig: {
+        commissionType: { type: String, enum: ["percent", "fixed", "none"], default: "percent" },
+        commissionValue: { type: Number, default: 0 },
+    },
+    commissionOverrides: {
+        type: [
+            new mongoose_1.Schema({
+                businessId: { type: String, required: true },
+                commissionType: { type: String, enum: ["percent", "fixed", "none"], default: "percent" },
+                commissionValue: { type: Number, default: 0 },
+            }, { _id: false }),
+        ],
+        default: [],
+    },
     // ---- Visibilidad hacia los Businesses (F4: configurable por hub) ----
     // Qué información del cliente final puede ver cada Business en su portal.
     businessVisibility: {
