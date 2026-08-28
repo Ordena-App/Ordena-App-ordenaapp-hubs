@@ -13,6 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listBusinessProducts = listBusinessProducts;
+exports.getProductByIdExternal = getProductByIdExternal;
 exports.createBusinessProduct = createBusinessProduct;
 exports.updateBusinessProduct = updateBusinessProduct;
 exports.deleteBusinessProduct = deleteBusinessProduct;
@@ -33,6 +34,16 @@ function headers(businessId) {
 function listBusinessProducts(businessId, params) {
     return __awaiter(this, void 0, void 0, function* () {
         const { data } = yield axios_1.default.get(`${config_1.PRODUCTS_SERVICE_LINK}/productbusiness-admin/${businessId}`, { params, timeout: 15000, headers: headers(businessId) });
+        return data;
+    });
+}
+/** Lee un producto por id (para validar su pertenencia al negocio). */
+function getProductByIdExternal(businessId, productId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.PRODUCTS_SERVICE_LINK}/product/${productId}`, {
+            timeout: 15000,
+            headers: headers(businessId),
+        });
         return data;
     });
 }

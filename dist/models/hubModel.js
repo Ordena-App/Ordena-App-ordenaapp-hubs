@@ -16,6 +16,10 @@ const contactSchema = new mongoose_1.Schema({
     // Número que recibe la notificación general de cada pedido del hub
     // (adicional a la notificación que recibe el negocio correspondiente).
     whatsapp: { type: String },
+    // Repartidor del hub (F3): el operador hace el delivery de TODOS sus
+    // negocios, así que el número vive aquí y no se repite por negocio.
+    // Recibe el aviso al pulsar "Notificar a repartidor" en un pedido.
+    deliveryWhatsapp: { type: String },
     website: { type: String },
     instagram: { type: String },
     facebook: { type: String },
@@ -52,6 +56,10 @@ const subscriptionSchema = new mongoose_1.Schema({
         end: { type: Date },
     },
     billingCycle: { type: String, enum: ["monthly", "yearly"], default: "monthly" },
+    // Desde cuándo está en mora (lo escribe el PATCH interno de billing).
+    // A los 15 días de mora se bloquea crear negocios/usuarios — NUNCA la
+    // operación pública (decisión F3 v2). null = al día.
+    pastDueSince: { type: Date, default: null },
     // Límites comerciales del plan. Defaults PERMISIVOS (-1 = ilimitado),
     // misma convención de red de seguridad que planFeatures en business.
     limits: {
@@ -59,6 +67,9 @@ const subscriptionSchema = new mongoose_1.Schema({
         ordersPerMonth: { type: Number, default: -1 },
         extraBusinessPrice: { type: Number, default: 0 },
         extraOrderPrice: { type: Number, default: 0 },
+        // Freno de emergencia (F3 v2): sobre businessesIncluded se factura
+        // como extra sin bloquear; sobre el hard cap si se bloquea. -1 = sin freno.
+        businessesHardCap: { type: Number, default: -1 },
     },
 }, { _id: false });
 const hubSchema = new mongoose_1.Schema({
@@ -92,6 +103,26 @@ const hubSchema = new mongoose_1.Schema({
         ordersPreviousMonth: { type: Number, default: 0 },
         extraOrdersCurrentMonth: { type: Number, default: 0 },
         lastRotatedAt: { type: Date },
+        // Reclamo atómico del aviso del 80% (una vez por mes): YYYY-MM ya avisado.
+        nudge80MonthKey: { type: String, default: null },
+    },
+    // ---- Liquidaciones (F4): comision del hub hacia sus negocios ----
+    // Default del hub + overrides POR NEGOCIO (a unos les cobra mas y a otros
+    // menos — decision de producto). percent = % sobre ventas brutas;
+    // fixed = monto fijo por pedido; none = sin comision.
+    settlementConfig: {
+        commissionType: { type: String, enum: ["percent", "fixed", "none"], default: "percent" },
+        commissionValue: { type: Number, default: 0 },
+    },
+    commissionOverrides: {
+        type: [
+            new mongoose_1.Schema({
+                businessId: { type: String, required: true },
+                commissionType: { type: String, enum: ["percent", "fixed", "none"], default: "percent" },
+                commissionValue: { type: Number, default: 0 },
+            }, { _id: false }),
+        ],
+        default: [],
     },
     // ---- Visibilidad hacia los Businesses (F4: configurable por hub) ----
     // Qué información del cliente final puede ver cada Business en su portal.

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getMyHubOrders, updateMyHubOrderStatus, getMyHubDashboard, getMyBusinessPortalSummary } from "../controllers/hubOrders.controller";
+import { getMyHubOrders, updateMyHubOrderStatus, getMyHubDashboard, getMyBusinessPortalSummary, notifyDeliveryForMyHubOrder } from "../controllers/hubOrders.controller";
 import {
     getMyHubPaymentAccounts,
     createMyHubPaymentAccount,
@@ -25,6 +25,13 @@ router.get(
     verifyHubJWT,
     requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"),
     getMyHubOrders
+);
+// Aviso al repartidor del hub (solo roles de hub: el delivery lo coordina el operador)
+router.post(
+    "/me/orders/:orderId/notify-delivery",
+    verifyHubJWT,
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    notifyDeliveryForMyHubOrder
 );
 router.patch(
     "/me/orders/:orderId/status",

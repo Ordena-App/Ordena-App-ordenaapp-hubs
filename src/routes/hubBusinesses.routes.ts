@@ -11,7 +11,33 @@ import {
 } from "../controllers/hubBusinesses.controller";
 import { verifyHubJWT, requireHubRole } from "../utils/auth";
 
-const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
+// Solo imágenes: evita que se suba y sirva contenido arbitrario desde el bucket.
+const imageFileFilter = (_req: any, file: any, cb: any) => {
+    if (/^image\/(jpeg|jpg|png|webp|gif|avif)$/i.test(file.mimetype)) return cb(null, true);
+    return cb(new Error("INVALID_FILE_TYPE"));
+};
+
+const logoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 4 * 1024 * 1024, files: 1 },
+    fileFilter: imageFileFilter,
+});
+
+function uploadErrorHandler(err: any, _req: any, res: any, next: any): any {
+    if (!err) return next();
+    if (err?.code?.startsWith?.("LIMIT_") || err?.message === "INVALID_FILE_TYPE") {
+        return res.status(400).json({
+            status: false,
+            statusCode: 400,
+            message:
+                err?.message === "INVALID_FILE_TYPE"
+                    ? "Formato no soportado. Sube una imagen JPG, PNG, WEBP o GIF."
+                    : "La imagen supera el límite de 4 MB.",
+            data: {},
+        });
+    }
+    return next(err);
+}
 
 const router = Router();
 
@@ -33,6 +59,7 @@ router.post(
     verifyHubJWT,
     requireHubRole("HUB_OWNER", "HUB_ADMIN"),
     logoUpload.single("image"),
+    uploadErrorHandler,
     uploadMyHubBusinessLogo
 );
 router.patch(

@@ -50,7 +50,7 @@ function upstreamError(res, error, action) {
  */
 function createBusinessForMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e;
+        var _a, _b, _c, _d, _e, _f;
         const ctx = req.hubContext;
         try {
             const { name, slug, description, industry, country_code, phone, email, address, region_settings } = req.body || {};
@@ -71,15 +71,36 @@ function createBusinessForMyHub(req, res) {
                     data: {},
                 });
             }
-            // Límite comercial del plan (businessesIncluded; -1 = ilimitado).
-            const limit = (_c = (_b = (_a = hub.subscription) === null || _a === void 0 ? void 0 : _a.limits) === null || _b === void 0 ? void 0 : _b.businessesIncluded) !== null && _c !== void 0 ? _c : -1;
-            if (limit !== -1 && hub.usageMetrics.businessesCount >= limit) {
+            // Mora >= 15 días: se bloquea SOLO crear (negocios/usuarios) — la
+            // operación pública y todo lo demás siguen intactos (decisión F3 v2).
+            const pastDueSince = (_a = hub.subscription) === null || _a === void 0 ? void 0 : _a.pastDueSince;
+            if (pastDueSince && Date.now() - new Date(pastDueSince).getTime() > 15 * 24 * 60 * 60 * 1000) {
                 return res.status(403).json({
                     status: false,
                     statusCode: 403,
-                    message: `Alcanzaste el límite de ${limit} negocios de tu plan. Mejora tu plan para agregar más.`,
-                    data: { limit, current: hub.usageMetrics.businessesCount },
+                    message: "Tu suscripción lleva más de 15 días con un pago pendiente. Actualiza tu método de pago en Plan para seguir creando.",
+                    data: { reason: "past_due_lock" },
                 });
+            }
+            // Límites del plan (F3 v2: excedente SIN bloquear). Sobre
+            // businessesIncluded se permite y se factura como negocio extra; solo
+            // el hard cap (freno de emergencia contra abuso/mora) bloquea.
+            const limits = ((_b = hub.subscription) === null || _b === void 0 ? void 0 : _b.limits) || {};
+            const included = (_c = limits.businessesIncluded) !== null && _c !== void 0 ? _c : -1;
+            const hardCap = (_d = limits.businessesHardCap) !== null && _d !== void 0 ? _d : -1;
+            const currentCount = hub.usageMetrics.businessesCount || 0;
+            if (hardCap !== -1 && currentCount >= hardCap) {
+                return res.status(403).json({
+                    status: false,
+                    statusCode: 403,
+                    message: `Alcanzaste el tope de ${hardCap} negocios. Contáctanos para ampliar tu plan.`,
+                    data: { hardCap, current: currentCount },
+                });
+            }
+            const isExtraBusiness = included !== -1 && currentCount >= included;
+            if (isExtraBusiness) {
+                console.log(`[hub ${ctx.hubId}] negocio extra: ${currentCount + 1} de ${included} incluidos ` +
+                    "(se factura como excedente, no se bloquea)");
             }
             const created = yield (0, businessService_external_1.createHubBusiness)(Object.assign({ hubId: ctx.hubId, name,
                 slug,
@@ -92,7 +113,7 @@ function createBusinessForMyHub(req, res) {
                     country: hub.country,
                     currency: hub.currency,
                     language: hub.language,
-                } }, (((_d = hub.branding) === null || _d === void 0 ? void 0 : _d.primaryColor)
+                } }, (((_e = hub.branding) === null || _e === void 0 ? void 0 : _e.primaryColor)
                 ? {
                     branding: {
                         primaryColor: hub.branding.primaryColor,
@@ -105,7 +126,7 @@ function createBusinessForMyHub(req, res) {
                 status: true,
                 statusCode: 201,
                 message: "Negocio creado correctamente",
-                data: (_e = created === null || created === void 0 ? void 0 : created.data) !== null && _e !== void 0 ? _e : created,
+                data: (_f = created === null || created === void 0 ? void 0 : created.data) !== null && _f !== void 0 ? _f : created,
             });
         }
         catch (error) {

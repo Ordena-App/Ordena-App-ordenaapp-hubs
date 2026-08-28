@@ -41,6 +41,33 @@ function upstreamError(res, error, action) {
         data: {},
     });
 }
+/**
+ * Candado extra: el producto DEBE pertenecer al negocio indicado. products ya
+ * acota sus mutaciones por x-business-id, pero validar aquí evita depender de
+ * una sola capa y devuelve un 403 claro en vez de un 404 confuso.
+ */
+function assertProductBelongsToBusiness(businessId, productId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c, _d, _e, _f, _g;
+        let product = null;
+        try {
+            const resp = yield (0, productsService_external_1.getProductByIdExternal)(businessId, productId);
+            product = (_e = (_d = (_c = (_b = (_a = resp === null || resp === void 0 ? void 0 : resp.data) === null || _a === void 0 ? void 0 : _a.product) !== null && _b !== void 0 ? _b : resp === null || resp === void 0 ? void 0 : resp.data) !== null && _c !== void 0 ? _c : resp === null || resp === void 0 ? void 0 : resp.product) !== null && _d !== void 0 ? _d : resp) !== null && _e !== void 0 ? _e : null;
+        }
+        catch (_h) {
+            product = null;
+        }
+        const ownerId = product && ((_f = product.businessId) !== null && _f !== void 0 ? _f : (_g = product === null || product === void 0 ? void 0 : product.data) === null || _g === void 0 ? void 0 : _g.businessId);
+        if (!ownerId || String(ownerId) !== String(businessId)) {
+            const err = new Error("product_not_in_business");
+            err.response = {
+                status: 403,
+                data: { status: false, statusCode: 403, message: "El producto no pertenece a este negocio", data: {} },
+            };
+            throw err;
+        }
+    });
+}
 /** GET /api/hubs/me/businesses/:businessId/products?page=&limit=&name= */
 function getMyBusinessProducts(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -84,9 +111,11 @@ function createMyBusinessProduct(req, res) {
                     data: {},
                 });
             }
-            // Si maneja stock, activar el tracking para que el storefront lo respete
-            if (fields.stock !== undefined && fields.track_stock === undefined) {
-                fields.track_stock = "true";
+            // track_stock SIEMPRE explícito: con stock => se controla inventario;
+            // sin stock => ilimitado. (products default a true + stock 0 = producto
+            // agotado desde su creación, que es lo contrario de "Stock (opcional)".)
+            if (fields.track_stock === undefined) {
+                fields.track_stock = fields.stock !== undefined ? "true" : "false";
             }
             const files = Array.isArray(req.files)
                 ? req.files
@@ -107,6 +136,9 @@ function updateMyBusinessProduct(req, res) {
             const businessId = String(req.params.businessId);
             const productId = String(req.params.productId);
             yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, businessId);
+            yield assertProductBelongsToBusiness(businessId, productId);
+            // `!== undefined` (no truthy): así un string vacío SÍ limpia el campo
+            // — antes la descripción no se podía borrar desde /hub-admin.
             const patch = {};
             for (const f of UPDATE_FIELDS) {
                 if (req.body && req.body[f] !== undefined)
@@ -136,6 +168,7 @@ function deleteMyBusinessProduct(req, res) {
             const businessId = String(req.params.businessId);
             const productId = String(req.params.productId);
             yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, businessId);
+            yield assertProductBelongsToBusiness(businessId, productId);
             const resp = yield (0, productsService_external_1.deleteBusinessProduct)(businessId, productId);
             return res.status(200).json(resp);
         }

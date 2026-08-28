@@ -8,6 +8,9 @@ import hubCategoriesRoutes from './routes/hubCategories.routes';
 import hubBusinessesRoutes from './routes/hubBusinesses.routes';
 import hubOrdersRoutes from './routes/hubOrders.routes';
 import hubProductsRoutes from './routes/hubProducts.routes';
+import hubBillingRoutes from './routes/hubBilling.routes';
+import hubReportsRoutes from './routes/hubReports.routes';
+import hubSettlementsRoutes from './routes/hubSettlements.routes';
 
 const app = express();
 
@@ -21,6 +24,9 @@ app.use(express.urlencoded({ limit: '20mb', extended: true }));
 // El api-gateway expone este servicio como público bajo /api/hubs (mismo patrón
 // que /api/agencies): la autenticación es el JWT propio del servicio, NO Firebase.
 app.use('/api/hub-users', hubUsersRoutes);
+app.use('/api/hubs', hubBillingRoutes);
+app.use('/api/hubs', hubReportsRoutes);
+app.use('/api/hubs', hubSettlementsRoutes);
 app.use('/api/hubs', hubOrdersRoutes);
 app.use('/api/hubs', hubProductsRoutes);
 app.use('/api/hubs', hubBusinessesRoutes);

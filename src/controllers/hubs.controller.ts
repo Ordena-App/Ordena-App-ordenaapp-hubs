@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import hubModel from "../models/hubModel";
 import hubCategoryModel from "../models/hubCategoryModel";
 import { INTERNAL_SHARED_SECRET } from "../config/config";
@@ -22,7 +23,7 @@ export async function resolveHubBySlug(req: Request, res: Response): Promise<Res
 
         const hub = await hubModel
             .findOne({ slug, status: "ACTIVE" })
-            .select("name slug description logo favicon branding contact timezone country currency language domain status");
+            .select("name slug description logo favicon branding contact.whatsapp contact.instagram contact.facebook contact.tiktok contact.website timezone country currency language domain status");
         if (!hub) {
             return res.status(404).json({
                 status: false,
@@ -55,10 +56,82 @@ export async function resolveHubBySlug(req: Request, res: Response): Promise<Res
 }
 
 /** GET /api/hubs/me — hub del usuario autenticado. */
+/**
+ * GET /api/hubs/resolve-store?storeLink=pizzeria--ab12cd
+ * PÚBLICO — lo consume el middleware del frontend en hosts core (ordena.app):
+ * si un visitante abre la URL namespaceada de un negocio de hub SIN contexto
+ * de hub (enlace compartido, resultado de Google), el middleware redirige 301
+ * al subdominio del hub para que el checkout use los métodos del HUB y el SEO
+ * no duplique contenido. Lee la colección businesses de la shared DB (mismo
+ * patrón que payments/isHubKey).
+ */
+export async function resolveHubStore(req: Request, res: Response): Promise<Response> {
+    try {
+        const storeLink = String(req.query.storeLink || "").trim().toLowerCase();
+        // Solo aplica a store_links namespaceados de hub: {slug}--{6 hex}
+        if (!/^[a-z0-9][a-z0-9-]*--[0-9a-f]{6}$/.test(storeLink)) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "storeLink inválido",
+                data: {},
+            });
+        }
+
+        const db = mongoose.connection.db;
+        const biz = db
+            ? await db.collection("businesses").findOne(
+                  { store_link: storeLink, context: "HUB_MANAGED" },
+                  { projection: { hubId: 1, hubSlug: 1 } }
+              )
+            : null;
+        if (!biz?.hubId) {
+            return res.status(404).json({
+                status: false,
+                statusCode: 404,
+                message: "No es un negocio de hub",
+                data: {},
+            });
+        }
+
+        const hub = await hubModel.findOne({ _id: biz.hubId, status: "ACTIVE" }).select("slug");
+        if (!hub?.slug) {
+            return res.status(404).json({
+                status: false,
+                statusCode: 404,
+                message: "Hub no disponible",
+                data: {},
+            });
+        }
+
+        return res.status(200).json({
+            status: true,
+            statusCode: 200,
+            message: "Negocio de hub resuelto",
+            data: { hubSlug: hub.slug, businessSlug: biz.hubSlug || null },
+        });
+    } catch (error) {
+        console.error("Error en resolveHubStore:", error);
+        return res.status(500).json({
+            status: false,
+            statusCode: 500,
+            message: "Error interno del servidor",
+            data: {},
+        });
+    }
+}
+
 export async function getMyHub(req: Request, res: Response): Promise<Response> {
     try {
         const ctx = req.hubContext!;
-        const hub = await hubModel.findById(ctx.hubId);
+        // El Portal Business solo necesita identidad y branding del hub: nunca
+        // su suscripción, límites ni métricas de uso (información del operador).
+        const projection =
+            ctx.role === "BUSINESS_VIEWER"
+                ? "name slug logo favicon branding timezone country currency language"
+                : undefined;
+        const query = hubModel.findById(ctx.hubId);
+        const hub = projection ? await query.select(projection) : await query;
         if (!hub) {
             return res.status(404).json({
                 status: false,
@@ -93,6 +166,8 @@ const UPDATABLE_FIELDS = [
     "favicon",
     "branding",
     "contact",
+    "settlementConfig",
+    "commissionOverrides",
     "timezone",
     "language",
     "businessVisibility",
@@ -102,9 +177,21 @@ const UPDATABLE_FIELDS = [
 export async function updateMyHub(req: Request, res: Response): Promise<Response> {
     try {
         const ctx = req.hubContext!;
+        // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
+        // claves ya no borra las demás (antes el $set del objeto entero se
+        // llevaba por delante deliveryWhatsapp, email, tiktok…).
+        const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig"]);
         const patch: Record<string, unknown> = {};
         for (const field of UPDATABLE_FIELDS) {
-            if (req.body && req.body[field] !== undefined) patch[field] = req.body[field];
+            const value = req.body ? req.body[field] : undefined;
+            if (value === undefined) continue;
+            if (NESTED.has(field) && value && typeof value === "object" && !Array.isArray(value)) {
+                for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+                    if (inner !== undefined) patch[`${field}.${key}`] = inner;
+                }
+            } else {
+                patch[field] = value;
+            }
         }
         if (Object.keys(patch).length === 0) {
             return res.status(400).json({
@@ -135,13 +222,14 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Interno server-to-server (orders-service): contador de pedidos del hub.
-// Guardado por INTERNAL_SHARED_SECRET (header x-ordena-secret; compat: si la
-// env no está configurada, se acepta sin header — mismo patrón del bot).
+// Endpoints internos server-to-server (orders-service).
+// FAIL-CLOSED: sin el secreto configurado se rechaza todo — igual que los
+// guards de business/orders/products. Estos endpoints exponen los teléfonos
+// del operador y del repartidor, y mutan contadores de facturación.
 // ────────────────────────────────────────────────────────────────────────────
 
 function isValidInternalCall(req: Request): boolean {
-    if (!INTERNAL_SHARED_SECRET) return true;
+    if (!INTERNAL_SHARED_SECRET) return false;
     const header = (req.headers["x-ordena-secret"] || req.headers["X-Ordena-Secret"]) as string | undefined;
     return header === INTERNAL_SHARED_SECRET;
 }
@@ -173,28 +261,33 @@ export async function incrementHubOrderUsage(req: Request, res: Response): Promi
             });
         }
 
-        // Rotación mensual (UTC) — idéntico patrón al usageMetrics de business.
+        // Rotación mensual (UTC) — ATÓMICA (F3 v2, base de facturación).
+        // Antes era leer-decidir-escribir: dos pedidos concurrentes en el cambio
+        // de mes podían rotar ambos y el segundo pisaba el incremento del
+        // primero. Ahora un solo updateOne con pipeline, condicionado a que
+        // lastRotatedAt sea anterior al inicio del mes: solo un llamador gana.
         const now = new Date();
-        const last = hub.usageMetrics.lastRotatedAt ? new Date(hub.usageMetrics.lastRotatedAt) : null;
-        const sameMonth =
-            !!last &&
-            last.getUTCFullYear() === now.getUTCFullYear() &&
-            last.getUTCMonth() === now.getUTCMonth();
-        let rotated = false;
-        if (!sameMonth) {
-            await hubModel.updateOne(
-                { _id: hubId },
+        const monthStartUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        const rotRes = await hubModel.updateOne(
+            {
+                _id: hubId,
+                $or: [
+                    { "usageMetrics.lastRotatedAt": { $lt: monthStartUtc } },
+                    { "usageMetrics.lastRotatedAt": null },
+                ],
+            },
+            [
                 {
                     $set: {
-                        "usageMetrics.ordersPreviousMonth": hub.usageMetrics.ordersCurrentMonth || 0,
+                        "usageMetrics.ordersPreviousMonth": { $ifNull: ["$usageMetrics.ordersCurrentMonth", 0] },
                         "usageMetrics.ordersCurrentMonth": 0,
                         "usageMetrics.extraOrdersCurrentMonth": 0,
-                        "usageMetrics.lastRotatedAt": now,
+                        "usageMetrics.lastRotatedAt": "$$NOW",
                     },
-                }
-            );
-            rotated = true;
-        }
+                },
+            ]
+        );
+        const rotated = rotRes.modifiedCount > 0;
 
         const limit = hub.subscription?.limits?.ordersPerMonth ?? -1;
         const updated = await hubModel.findByIdAndUpdate(
@@ -211,11 +304,28 @@ export async function incrementHubOrderUsage(req: Request, res: Response): Promi
             );
         }
 
+        // ── Aviso del 80% (F3 v2): claim atómico, máx. 1 por mes ──
+        // Se dispara al CRUZAR ceil(80% del límite). orders manda el WhatsApp
+        // (aquí no hay cliente del bot); esto solo decide si toca avisar.
+        let nudge80 = false;
+        if (limit !== -1 && limit > 0) {
+            const threshold = Math.ceil(limit * 0.8);
+            if (current >= threshold && current < limit) {
+                const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+                const claimed = await hubModel.findOneAndUpdate(
+                    { _id: hubId, "usageMetrics.nudge80MonthKey": { $ne: monthKey } },
+                    { $set: { "usageMetrics.nudge80MonthKey": monthKey } },
+                    { new: false }
+                );
+                nudge80 = !!claimed;
+            }
+        }
+
         return res.status(200).json({
             status: true,
             statusCode: 200,
             message: "Uso incrementado",
-            data: { ordersCurrentMonth: current, isExtra, rotated },
+            data: { ordersCurrentMonth: current, ordersLimit: limit, isExtra, rotated, nudge80 },
         });
     } catch (error) {
         console.error("Error incrementando uso del hub:", error);
@@ -224,6 +334,55 @@ export async function incrementHubOrderUsage(req: Request, res: Response): Promi
             statusCode: 500,
             message: "Error interno del servidor",
             data: { error: error instanceof Error ? error.message : error },
+        });
+    }
+}
+
+
+/**
+ * GET /api/hubs/internal/:hubId/notification-config  (interno, orders)
+ * Datos que orders necesita para las plantillas de WhatsApp del hub:
+ * a quién avisar y qué información puede ver el negocio.
+ */
+export async function getHubNotificationConfig(req: Request, res: Response): Promise<Response> {
+    try {
+        if (!isValidInternalCall(req)) {
+            return res.status(403).json({
+                status: false,
+                statusCode: 403,
+                message: "Llamada interna no autorizada",
+                data: {},
+            });
+        }
+        const hub = await hubModel
+            .findById(String(req.params.hubId))
+            .select("name contact businessVisibility");
+        if (!hub) {
+            return res.status(404).json({
+                status: false,
+                statusCode: 404,
+                message: "Hub no encontrado",
+                data: {},
+            });
+        }
+        return res.status(200).json({
+            status: true,
+            statusCode: 200,
+            message: "Configuración de notificaciones",
+            data: {
+                hubName: hub.name,
+                hubWhatsapp: hub.contact?.whatsapp || null,
+                deliveryWhatsapp: hub.contact?.deliveryWhatsapp || null,
+                businessVisibility: hub.businessVisibility,
+            },
+        });
+    } catch (error) {
+        console.error("Error leyendo configuración de notificaciones:", error);
+        return res.status(500).json({
+            status: false,
+            statusCode: 500,
+            message: "Error interno del servidor",
+            data: {},
         });
     }
 }

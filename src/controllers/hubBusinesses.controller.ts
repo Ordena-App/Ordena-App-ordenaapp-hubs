@@ -60,15 +60,39 @@ export async function createBusinessForMyHub(req: Request, res: Response): Promi
             });
         }
 
-        // Límite comercial del plan (businessesIncluded; -1 = ilimitado).
-        const limit = hub.subscription?.limits?.businessesIncluded ?? -1;
-        if (limit !== -1 && hub.usageMetrics.businessesCount >= limit) {
+        // Mora >= 15 días: se bloquea SOLO crear (negocios/usuarios) — la
+        // operación pública y todo lo demás siguen intactos (decisión F3 v2).
+        const pastDueSince = (hub.subscription as any)?.pastDueSince;
+        if (pastDueSince && Date.now() - new Date(pastDueSince).getTime() > 15 * 24 * 60 * 60 * 1000) {
             return res.status(403).json({
                 status: false,
                 statusCode: 403,
-                message: `Alcanzaste el límite de ${limit} negocios de tu plan. Mejora tu plan para agregar más.`,
-                data: { limit, current: hub.usageMetrics.businessesCount },
+                message: "Tu suscripción lleva más de 15 días con un pago pendiente. Actualiza tu método de pago en Plan para seguir creando.",
+                data: { reason: "past_due_lock" },
             });
+        }
+
+        // Límites del plan (F3 v2: excedente SIN bloquear). Sobre
+        // businessesIncluded se permite y se factura como negocio extra; solo
+        // el hard cap (freno de emergencia contra abuso/mora) bloquea.
+        const limits: any = hub.subscription?.limits || {};
+        const included = limits.businessesIncluded ?? -1;
+        const hardCap = limits.businessesHardCap ?? -1;
+        const currentCount = hub.usageMetrics.businessesCount || 0;
+        if (hardCap !== -1 && currentCount >= hardCap) {
+            return res.status(403).json({
+                status: false,
+                statusCode: 403,
+                message: `Alcanzaste el tope de ${hardCap} negocios. Contáctanos para ampliar tu plan.`,
+                data: { hardCap, current: currentCount },
+            });
+        }
+        const isExtraBusiness = included !== -1 && currentCount >= included;
+        if (isExtraBusiness) {
+            console.log(
+                `[hub ${ctx.hubId}] negocio extra: ${currentCount + 1} de ${included} incluidos ` +
+                "(se factura como excedente, no se bloquea)"
+            );
         }
 
         const created = await createHubBusiness({

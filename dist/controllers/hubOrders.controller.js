@@ -16,6 +16,7 @@ exports.getMyHubOrders = getMyHubOrders;
 exports.updateMyHubOrderStatus = updateMyHubOrderStatus;
 exports.getMyBusinessPortalSummary = getMyBusinessPortalSummary;
 exports.getMyHubDashboard = getMyHubDashboard;
+exports.notifyDeliveryForMyHubOrder = notifyDeliveryForMyHubOrder;
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const ordersService_external_1 = require("../services/ordersService.external");
 const businessService_external_1 = require("../services/businessService.external");
@@ -35,12 +36,70 @@ function upstreamError(res, error, action) {
     });
 }
 /**
+ * Matriz de privacidad del hub aplicada a los pedidos que ve un negocio.
+ *
+ * El operador decide qué datos del cliente final comparte (hub.businessVisibility).
+ * El filtrado es SERVER-SIDE a propósito: hacerlo en el cliente sería cosmético
+ * — el payload viajaría igual y quedaría en su localStorage.
+ *
+ * `customer_email` no está en la matriz de tres campos pero es un canal de
+ * contacto directo, así que sigue la misma regla que el teléfono.
+ */
+function stripOrderPII(order, visibility) {
+    const clean = Object.assign({}, order);
+    // El WhatsApp del repartidor del hub es interno del operador: el negocio
+    // nunca debe verlo, sin importar la matriz de privacidad.
+    clean.delivery_notified_to = null;
+    const shipTo = Object.assign({}, order.ship_to);
+    const payment = Object.assign({}, order.payment);
+    if (!visibility.customerName) {
+        clean.customer_name = null;
+        shipTo.name = null;
+    }
+    if (!visibility.customerPhone) {
+        clean.customer_number = null;
+        clean.customer_email = null;
+        // payer_email del pago es otro canal de contacto directo.
+        payment.payer_email = null;
+    }
+    if (!visibility.customerAddress) {
+        clean.delivery_address = null;
+        clean.delivery_city = null;
+        clean.delivery_department = null;
+        clean.delivery_reference = null;
+        // ship_to lleva la misma direccion por otro camino.
+        shipTo.address_line1 = null;
+        shipTo.city_locality = null;
+        shipTo.state_province = null;
+        shipTo.postal_code = null;
+    }
+    if (order.ship_to)
+        clean.ship_to = shipTo;
+    if (order.payment)
+        clean.payment = payment;
+    return clean;
+}
+/** Lee la matriz de privacidad del hub con los defaults fail-safe (nombre sí,
+ *  teléfono y dirección no). Compartida por el listado y el PATCH de estado. */
+function readHubVisibility(hubId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c;
+        const hub = yield hubModel_1.default.findById(hubId).select("businessVisibility");
+        return {
+            customerName: ((_a = hub === null || hub === void 0 ? void 0 : hub.businessVisibility) === null || _a === void 0 ? void 0 : _a.customerName) !== false,
+            customerPhone: ((_b = hub === null || hub === void 0 ? void 0 : hub.businessVisibility) === null || _b === void 0 ? void 0 : _b.customerPhone) === true,
+            customerAddress: ((_c = hub === null || hub === void 0 ? void 0 : hub.businessVisibility) === null || _c === void 0 ? void 0 : _c.customerAddress) === true,
+        };
+    });
+}
+/**
  * GET /api/hubs/me/orders — pedidos consolidados del hub.
  * Filtros: businessId, status, from, to, page, limit.
  * BUSINESS_VIEWER queda SIEMPRE limitado a su negocio (scope del token).
  */
 function getMyHubOrders(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
         const ctx = req.hubContext;
         try {
             const requested = typeof req.query.businessId === "string" ? req.query.businessId : undefined;
@@ -61,6 +120,13 @@ function getMyHubOrders(req, res) {
                 from: typeof req.query.from === "string" ? req.query.from : undefined,
                 to: typeof req.query.to === "string" ? req.query.to : undefined,
             });
+            // El Portal Business solo recibe los datos del cliente que el hub decide
+            // compartir. Los roles del hub ven todo (son los dueños de la operación).
+            if (ctx.role === "BUSINESS_VIEWER") {
+                const visibility = yield readHubVisibility(ctx.hubId);
+                const orders = Array.isArray((_a = resp === null || resp === void 0 ? void 0 : resp.data) === null || _a === void 0 ? void 0 : _a.orders) ? resp.data.orders : [];
+                return res.status(200).json(Object.assign(Object.assign({}, resp), { data: Object.assign(Object.assign({}, resp.data), { orders: orders.map((o) => stripOrderPII(o, visibility)) }) }));
+            }
             return res.status(200).json(resp);
         }
         catch (error) {
@@ -76,6 +142,7 @@ function getMyHubOrders(req, res) {
  */
 function updateMyHubOrderStatus(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
         const ctx = req.hubContext;
         try {
             const orderId = String(req.params.orderId);
@@ -94,6 +161,12 @@ function updateMyHubOrderStatus(req, res) {
                 payment_status,
                 businessId: scopedBusinessId,
             });
+            // El pedido de vuelta también respeta la matriz: si no, un BUSINESS_VIEWER
+            // recupera nombre/teléfono/dirección con solo cambiar el estado.
+            if (ctx.role === "BUSINESS_VIEWER" && ((_a = resp === null || resp === void 0 ? void 0 : resp.data) === null || _a === void 0 ? void 0 : _a.order)) {
+                const visibility = yield readHubVisibility(ctx.hubId);
+                resp.data.order = stripOrderPII(resp.data.order, visibility);
+            }
             return res.status(200).json(resp);
         }
         catch (error) {
@@ -207,6 +280,40 @@ function getMyHubDashboard(req, res) {
         }
         catch (error) {
             return upstreamError(res, error, "cargar el dashboard");
+        }
+    });
+}
+/**
+ * POST /api/hubs/me/orders/:orderId/notify-delivery
+ * El operador avisa a SU repartidor. Un BUSINESS_VIEWER no puede: el delivery
+ * del hub lo coordina el operador, no cada negocio.
+ */
+function notifyDeliveryForMyHubOrder(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
+        const ctx = req.hubContext;
+        try {
+            const orderId = String(req.params.orderId);
+            const { businessId } = req.body || {};
+            if (!businessId) {
+                return res.status(400).json({
+                    status: false,
+                    statusCode: 400,
+                    message: "businessId es requerido",
+                    data: {},
+                });
+            }
+            // El pedido debe ser de un negocio de ESTE hub.
+            yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, String(businessId));
+            const resp = yield (0, ordersService_external_1.notifyDeliveryPersonExternal)(String(businessId), orderId);
+            return res.status(200).json(resp);
+        }
+        catch (error) {
+            const st = (_a = error === null || error === void 0 ? void 0 : error.response) === null || _a === void 0 ? void 0 : _a.status;
+            if (st && st >= 400 && st < 500 && ((_b = error === null || error === void 0 ? void 0 : error.response) === null || _b === void 0 ? void 0 : _b.data)) {
+                return res.status(st).json(error.response.data);
+            }
+            return upstreamError(res, error, "avisar al repartidor");
         }
     });
 }

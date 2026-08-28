@@ -20,6 +20,8 @@ exports.patchBusinessInternal = patchBusinessInternal;
 exports.getBusinessSettingsExternal = getBusinessSettingsExternal;
 exports.patchBusinessWeeklyHours = patchBusinessWeeklyHours;
 exports.uploadBusinessLogoExternal = uploadBusinessLogoExternal;
+exports.addHubDomainExternal = addHubDomainExternal;
+exports.hubDomainStatusExternal = hubDomainStatusExternal;
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("../config/config");
 // ============================================================================
@@ -111,6 +113,23 @@ function uploadBusinessLogoExternal(businessId, file) {
         const fd = new FormDataCtor();
         fd.append("image", new Blob([file.buffer], { type: file.mimetype }), file.originalname);
         const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/business/${businessId}/hub-logo`, fd, { timeout: 30000, headers: internalHeaders({ "x-business-id": businessId }) });
+        return data;
+    });
+}
+// ── Dominio custom del hub (F4): proxies de Vercel via business ──
+function addHubDomainExternal(domain) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.post(`${config_1.BUSINESS_SERVICE_LINK}/internal/hub-domains`, { domain }, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+function hubDomainStatusExternal(domain) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.BUSINESS_SERVICE_LINK}/internal/hub-domains/status`, {
+            timeout: 20000,
+            headers: internalHeaders(),
+            params: { domain },
+        });
         return data;
     });
 }
