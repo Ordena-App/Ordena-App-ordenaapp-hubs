@@ -18,6 +18,7 @@ exports.createBusinessProduct = createBusinessProduct;
 exports.updateBusinessProduct = updateBusinessProduct;
 exports.deleteBusinessProduct = deleteBusinessProduct;
 exports.setProductHubCategoriesExternal = setProductHubCategoriesExternal;
+exports.listBusinessCategoriesExternal = listBusinessCategoriesExternal;
 const axios_1 = __importDefault(require("axios"));
 const buffer_1 = require("buffer");
 const config_1 = require("../config/config");
@@ -99,5 +100,16 @@ function setProductHubCategoriesExternal(hubId, productId, hubCategoryIds) {
             headers: config_1.INTERNAL_SHARED_SECRET ? { "x-ordena-secret": config_1.INTERNAL_SHARED_SECRET } : {},
         });
         return data;
+    });
+}
+/** Categorías INTERNAS del negocio (colección category del ms products). */
+function listBusinessCategoriesExternal(businessId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.PRODUCTS_SERVICE_LINK}/categorybussiness/${businessId}`, {
+            timeout: 15000,
+            headers: headers(businessId),
+        });
+        // El upstream devuelve el array pelado (o {message} cuando no hay ninguna).
+        return Array.isArray(data) ? data : [];
     });
 }

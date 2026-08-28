@@ -6,6 +6,7 @@ import {
     updateMyBusinessProduct,
     deleteMyBusinessProduct,
     setMyProductHubCategories,
+    getMyBusinessCategories,
 } from "../controllers/hubProducts.controller";
 import { verifyHubJWT, requireHubRole } from "../utils/auth";
 
@@ -75,6 +76,13 @@ router.patch(
     verifyHubJWT,
     requireHubRole("HUB_OWNER", "HUB_ADMIN"),
     setMyProductHubCategories
+);
+
+router.get(
+    "/me/businesses/:businessId/categories",
+    verifyHubJWT,
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    getMyBusinessCategories
 );
 
 export default router;

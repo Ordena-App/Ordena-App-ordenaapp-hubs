@@ -8,6 +8,7 @@ import {
     setProductHubCategoriesExternal,
     getProductByIdExternal,
     UploadedFile,
+    listBusinessCategoriesExternal,
 } from "../services/productsService.external";
 
 // Gestión de productos de los negocios del hub (F2.1). Regla de oro intacta:
@@ -79,8 +80,10 @@ export async function getMyBusinessProducts(req: Request, res: Response): Promis
 
 // Campos que el hub puede definir al crear/editar. Variantes, combinaciones,
 // promociones y demás avanzado quedan para el editor completo (post-MVP).
-const CREATE_FIELDS = ["name", "price", "stock", "description", "sku", "track_stock"] as const;
-const UPDATE_FIELDS = ["name", "price", "stock", "description", "sku", "track_stock", "isActive"] as const;
+// categories viaja como JSON string [{idCategory}] — mismo contrato que el
+// dashboard clásico; cost y stock_alert_threshold son escalares del modelo.
+const CREATE_FIELDS = ["name", "price", "cost", "stock", "stock_alert_threshold", "description", "sku", "track_stock", "categories"] as const;
+const UPDATE_FIELDS = ["name", "price", "cost", "stock", "stock_alert_threshold", "description", "sku", "track_stock", "isActive", "categories"] as const;
 
 /** POST /api/hubs/me/businesses/:businessId/products (multipart: hasta 4 'images' opcionales) */
 export async function createMyBusinessProduct(req: Request, res: Response): Promise<Response> {
@@ -184,5 +187,32 @@ export async function setMyProductHubCategories(req: Request, res: Response): Pr
         return res.status(200).json(resp);
     } catch (error: any) {
         return upstreamError(res, error, "asignar las categorías");
+    }
+}
+
+
+/**
+ * GET /api/hubs/me/businesses/:businessId/categories
+ * Categorías internas del negocio (para asignarlas al crear/editar productos
+ * desde el hub — mismas categorías que usa el storefront clásico del negocio).
+ */
+export async function getMyBusinessCategories(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const businessId = String(req.params.businessId);
+        await assertBusinessBelongsToHub(ctx.hubId, businessId);
+        const categories = await listBusinessCategoriesExternal(businessId);
+        return res.status(200).json({
+            status: true,
+            statusCode: 200,
+            message: "Categorías del negocio",
+            data: { categories },
+        });
+    } catch (error: any) {
+        if (error?.code === "BUSINESS_NOT_IN_HUB") {
+            return res.status(403).json({ status: false, statusCode: 403, message: "El negocio no pertenece a este hub", data: {} });
+        }
+        console.error("Error listando categorías del negocio:", error?.response?.data || error?.message || error);
+        return res.status(502).json({ status: false, statusCode: 502, message: "No se pudieron cargar las categorías", data: {} });
     }
 }

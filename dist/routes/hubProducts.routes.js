@@ -46,4 +46,5 @@ router.post("/me/businesses/:businessId/products", auth_1.verifyHubJWT, (0, auth
 router.patch("/me/businesses/:businessId/products/:productId", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubProducts_controller_1.updateMyBusinessProduct);
 router.delete("/me/businesses/:businessId/products/:productId", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubProducts_controller_1.deleteMyBusinessProduct);
 router.patch("/me/products/:productId/hub-categories", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubProducts_controller_1.setMyProductHubCategories);
+router.get("/me/businesses/:businessId/categories", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubProducts_controller_1.getMyBusinessCategories);
 exports.default = router;

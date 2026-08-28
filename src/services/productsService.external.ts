@@ -113,3 +113,14 @@ export async function setProductHubCategoriesExternal(
     );
     return data;
 }
+
+
+/** Categorías INTERNAS del negocio (colección category del ms products). */
+export async function listBusinessCategoriesExternal(businessId: string) {
+    const { data } = await axios.get(`${PRODUCTS_SERVICE_LINK}/categorybussiness/${businessId}`, {
+        timeout: 15000,
+        headers: headers(businessId),
+    });
+    // El upstream devuelve el array pelado (o {message} cuando no hay ninguna).
+    return Array.isArray(data) ? data : [];
+}
