@@ -1,7 +1,7 @@
 # F3 v2 — Facturación de Hubs con Stripe
 
 **Fecha:** 27 de agosto de 2026
-**Estado:** fase 1 implementada (planes como fuente de verdad + suscripción Stripe end-to-end). Fase 2 pendiente: cobro del excedente por invoice item + reportes en ms-reportes.
+**Estado:** fases 1 y 2 implementadas (planes + suscripción + cobro de excedente + nudge 80% + escalación de mora). Pendiente: reportes de hub en ms-reportes.
 
 ---
 
@@ -78,9 +78,18 @@ Stripe ──webhook──▶ payments ──PATCH interno──▶ hubs (aplica
 
 **Pasos de deploy adicionales:** correr `npx ts-node src/scripts/seedHubPlans.ts` en hubs (una vez por entorno) y crear los prices en Stripe (§2) antes de probar el checkout.
 
-## 5. Fase 2 (pendiente)
+## 5. Fase 2 — IMPLEMENTADA (27/08/2026)
 
-- **Excedente en mora**: ledger `hub_usage_ledgers` (índice único `{hubId, period}`), re-conteo desde `orders` al cierre del período (la factura NUNCA se arma con el contador), invoice item en `invoice.upcoming` (el hook ya intercepta el evento de hub y hoy es no-op explícito).
-- Sincronía de `quantity` para negocios extra (subscription item con proration).
-- Reportes de hub en ms-reportes (`/api/reports/hub/*` con secreto interno).
-- Nudge de WhatsApp al 80% del límite (plantilla Meta Utility nueva).
+Decisiones cerradas con el usuario: pedido facturable = **creado** · negocios extra **al ledger mensual** (no subscription item) · mora día 15 = **bloquear solo crear negocios/usuarios**.
+
+- **Ledger `hub_usage_ledgers`** (único `{hubId, period}`): sella lo facturable de cada período de suscripción cerrado. La cifra sale de RE-CONTAR orders (summary interno, filtros espejo) — nunca del contador. Incluye pedidos extra Y negocios extra en la misma línea.
+- **Cobro en `invoice.upcoming`**: payments sella el ledger (claim interno a hubs), crea el invoice item en la factura que viene y marca INVOICED. **Doble idempotencia**: status del ledger + idempotency key de Stripe `hub-overage-{hubId}-{period}` — un retry jamás duplica el cargo.
+- **Nudge del 80%**: claim atómico mensual en hubs (`nudge80MonthKey`) + envío desde orders con la plantilla `uso_hub_es` (⚠️ crearla en Meta como Utility — texto y variables en `PLANTILLAS_REPARTIDOR_Y_HUB.md` §4b). Env opcional: `TEMPLATE_HUB_USAGE_ES`.
+- **Escalación de mora**: `subscription.pastDueSince` lo sella/limpia el PATCH interno; a los 15 días de mora se bloquea SOLO crear negocios y usuarios (403 con `reason: past_due_lock`). Storefronts y pedidos jamás se tocan.
+- El panel `/me/billing` ahora devuelve también `lastLedger` (último período cerrado) para que la factura nunca sorprenda.
+
+## 6. Pendiente
+
+- Reportes de hub en ms-reportes (`/api/reports/hub/*` con secreto interno) + página `/hub-admin/informes`.
+- Sincronía de `quantity` para negocios extra (subscription item con proration) — solo si algún hub escala mucho; el ledger mensual ya los cobra.
+- Script `reapplyHubPlans` para propagar cambios de catálogo a los snapshots.

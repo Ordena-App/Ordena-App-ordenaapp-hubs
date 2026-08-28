@@ -307,11 +307,23 @@ function incrementHubOrderUsage(req, res) {
             if (isExtra) {
                 yield hubModel_1.default.updateOne({ _id: hubId }, { $inc: { "usageMetrics.extraOrdersCurrentMonth": 1 } });
             }
+            // ── Aviso del 80% (F3 v2): claim atómico, máx. 1 por mes ──
+            // Se dispara al CRUZAR ceil(80% del límite). orders manda el WhatsApp
+            // (aquí no hay cliente del bot); esto solo decide si toca avisar.
+            let nudge80 = false;
+            if (limit !== -1 && limit > 0) {
+                const threshold = Math.ceil(limit * 0.8);
+                if (current >= threshold && current < limit) {
+                    const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+                    const claimed = yield hubModel_1.default.findOneAndUpdate({ _id: hubId, "usageMetrics.nudge80MonthKey": { $ne: monthKey } }, { $set: { "usageMetrics.nudge80MonthKey": monthKey } }, { new: false });
+                    nudge80 = !!claimed;
+                }
+            }
             return res.status(200).json({
                 status: true,
                 statusCode: 200,
                 message: "Uso incrementado",
-                data: { ordersCurrentMonth: current, isExtra, rotated },
+                data: { ordersCurrentMonth: current, ordersLimit: limit, isExtra, rotated, nudge80 },
             });
         }
         catch (error) {

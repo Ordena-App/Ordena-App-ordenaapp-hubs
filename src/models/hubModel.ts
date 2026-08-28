@@ -68,6 +68,10 @@ const subscriptionSchema = new Schema(
             end: { type: Date },
         },
         billingCycle: { type: String, enum: ["monthly", "yearly"], default: "monthly" },
+        // Desde cuándo está en mora (lo escribe el PATCH interno de billing).
+        // A los 15 días de mora se bloquea crear negocios/usuarios — NUNCA la
+        // operación pública (decisión F3 v2). null = al día.
+        pastDueSince: { type: Date, default: null },
         // Límites comerciales del plan. Defaults PERMISIVOS (-1 = ilimitado),
         // misma convención de red de seguridad que planFeatures en business.
         limits: {
@@ -119,6 +123,8 @@ const hubSchema = new Schema({
         ordersPreviousMonth: { type: Number, default: 0 },
         extraOrdersCurrentMonth: { type: Number, default: 0 },
         lastRotatedAt: { type: Date },
+        // Reclamo atómico del aviso del 80% (una vez por mes): YYYY-MM ya avisado.
+        nudge80MonthKey: { type: String, default: null },
     },
 
     // ---- Visibilidad hacia los Businesses (F4: configurable por hub) ----

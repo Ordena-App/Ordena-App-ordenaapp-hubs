@@ -199,9 +199,22 @@ function loginHubUser(req, res) {
  */
 function createHubUser(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
         try {
             const ctx = req.hubContext;
             const { email, password, name, role, businessId } = req.body || {};
+            const hubForLock = yield hubModel_1.default.findById(ctx.hubId).select("subscription.pastDueSince").lean();
+            // Mora >= 15 días: se bloquea SOLO crear (negocios/usuarios) — la
+            // operación pública y todo lo demás siguen intactos (decisión F3 v2).
+            const pastDueSince = (_a = hubForLock === null || hubForLock === void 0 ? void 0 : hubForLock.subscription) === null || _a === void 0 ? void 0 : _a.pastDueSince;
+            if (pastDueSince && Date.now() - new Date(pastDueSince).getTime() > 15 * 24 * 60 * 60 * 1000) {
+                return res.status(403).json({
+                    status: false,
+                    statusCode: 403,
+                    message: "Tu suscripción lleva más de 15 días con un pago pendiente. Actualiza tu método de pago en Plan para seguir creando.",
+                    data: { reason: "past_due_lock" },
+                });
+            }
             const allowedRoles = ["HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"];
             if (!email || !password || !role || !allowedRoles.includes(role)) {
                 return res.status(400).json({
@@ -226,7 +239,7 @@ function createHubUser(req, res) {
                 try {
                     yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, String(businessId));
                 }
-                catch (_a) {
+                catch (_b) {
                     return res.status(400).json({
                         status: false,
                         statusCode: 400,

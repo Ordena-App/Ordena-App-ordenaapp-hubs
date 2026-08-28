@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import hubModel from "../models/hubModel";
 import hubPlanModel from "../models/hubPlanModel";
+import hubUsageLedgerModel from "../models/hubUsageLedgerModel";
+import { sealLedgerForPeriod } from "../services/hubUsageReconcile.service";
 import { applyPlanToHub } from "../utils/applyHubPlan";
 import {
     createHubCheckoutSessionExternal,
@@ -47,6 +49,23 @@ export async function patchHubSubscriptionInternal(req: Request, res: Response):
         const hub = await hubModel.findById(hubId).select("_id");
         if (!hub) {
             return res.status(404).json({ status: false, statusCode: 404, message: "Hub no encontrado", data: {} });
+        }
+
+        // Mora: sellar desde cuándo (para la escalación del día 15) y limpiarla
+        // al volver a estar al día. Se hace aparte de applyPlanToHub porque es
+        // una transición de estado, no parte del snapshot del plan.
+        if (typeof status === "string") {
+            if (status === "PAST_DUE") {
+                await hubModel.updateOne(
+                    { _id: hubId, "subscription.pastDueSince": null },
+                    { $set: { "subscription.pastDueSince": new Date() } }
+                );
+            } else if (status === "ACTIVE" || status === "TRIAL") {
+                await hubModel.updateOne(
+                    { _id: hubId },
+                    { $set: { "subscription.pastDueSince": null } }
+                );
+            }
         }
 
         const plan = await hubPlanModel.findOne({ lookupKeys: lookupKey, is_active: true }).lean();
@@ -133,11 +152,19 @@ export async function getMyHubBilling(req: Request, res: Response): Promise<Resp
         const projectedOverage =
             extraOrders * (limits.extraOrderPrice || 0) + extraBusinesses * (limits.extraBusinessPrice || 0);
 
+        // Último período cerrado (para que la factura nunca sorprenda).
+        const lastLedger = await hubUsageLedgerModel
+            .findOne({ hubId: ctx.hubId })
+            .sort({ periodEnd: -1 })
+            .select("period extraOrders extraBusinesses totalAmount currency status periodStart periodEnd")
+            .lean();
+
         return res.status(200).json({
             status: true,
             statusCode: 200,
             message: "Facturación del hub",
             data: {
+                lastLedger,
                 subscription: {
                     status: sub.status || "TRIAL",
                     planRef: sub.planRef || null,
@@ -203,5 +230,64 @@ export async function createMyHubPortalSession(req: Request, res: Response): Pro
         return res.status(200).json(resp);
     } catch (error: any) {
         return upstreamError(res, error, "abrir el portal de facturación");
+    }
+}
+
+
+/**
+ * POST /api/hubs/internal/:hubId/billing/overage/claim  (interno — payments,
+ * durante invoice.upcoming). Body: { periodStart, periodEnd }.
+ * Re-cuenta el período desde orders y sella el ledger (DRAFT). Si ya estaba
+ * INVOICED lo devuelve tal cual: el caller ve stripeInvoiceItemId y no re-cobra.
+ */
+export async function claimHubOverageInternal(req: Request, res: Response): Promise<Response> {
+    try {
+        if (!isValidInternalCall(req)) {
+            return res.status(403).json({ status: false, statusCode: 403, message: "Llamada interna no autorizada", data: {} });
+        }
+        const hubId = String(req.params.hubId);
+        const periodStart = new Date(String(req.body?.periodStart || ""));
+        const periodEnd = new Date(String(req.body?.periodEnd || ""));
+        if (isNaN(periodStart.getTime()) || isNaN(periodEnd.getTime()) || periodEnd <= periodStart) {
+            return res.status(400).json({ status: false, statusCode: 400, message: "periodStart/periodEnd inválidos", data: {} });
+        }
+        const ledger = await sealLedgerForPeriod(hubId, periodStart, periodEnd);
+        if (!ledger) {
+            return res.status(404).json({ status: false, statusCode: 404, message: "Hub no encontrado", data: {} });
+        }
+        return res.status(200).json({ status: true, statusCode: 200, message: "Ledger sellado", data: { ledger } });
+    } catch (error) {
+        console.error("Error en claimHubOverageInternal:", error);
+        return res.status(500).json({ status: false, statusCode: 500, message: "Error interno del servidor", data: {} });
+    }
+}
+
+/**
+ * PATCH /api/hubs/internal/:hubId/billing/overage/:ledgerId/invoiced (interno)
+ * Marca el ledger como INVOICED con el invoice item de Stripe como testigo.
+ */
+export async function markHubOverageInvoicedInternal(req: Request, res: Response): Promise<Response> {
+    try {
+        if (!isValidInternalCall(req)) {
+            return res.status(403).json({ status: false, statusCode: 403, message: "Llamada interna no autorizada", data: {} });
+        }
+        const hubId = String(req.params.hubId);
+        const ledgerId = String(req.params.ledgerId);
+        const stripeInvoiceItemId = String(req.body?.stripeInvoiceItemId || "");
+        if (!stripeInvoiceItemId) {
+            return res.status(400).json({ status: false, statusCode: 400, message: "stripeInvoiceItemId es requerido", data: {} });
+        }
+        const updated = await hubUsageLedgerModel.findOneAndUpdate(
+            { _id: ledgerId, hubId },
+            { $set: { status: "INVOICED", stripeInvoiceItemId, invoicedAt: new Date(), updated_at: new Date() } },
+            { new: true }
+        ).lean();
+        if (!updated) {
+            return res.status(404).json({ status: false, statusCode: 404, message: "Ledger no encontrado", data: {} });
+        }
+        return res.status(200).json({ status: true, statusCode: 200, message: "Ledger facturado", data: { ledger: updated } });
+    } catch (error) {
+        console.error("Error en markHubOverageInvoicedInternal:", error);
+        return res.status(500).json({ status: false, statusCode: 500, message: "Error interno del servidor", data: {} });
     }
 }

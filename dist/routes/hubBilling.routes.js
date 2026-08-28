@@ -6,6 +6,9 @@ const auth_1 = require("../utils/auth");
 const router = (0, express_1.Router)();
 // Interna (payments-service, webhook de Stripe): aplicar plan/estado/periodo
 router.patch("/internal/:hubId/subscription", hubBilling_controller_1.patchHubSubscriptionInternal);
+// Internas (payments, invoice.upcoming): sellar y marcar el excedente del período
+router.post("/internal/:hubId/billing/overage/claim", hubBilling_controller_1.claimHubOverageInternal);
+router.patch("/internal/:hubId/billing/overage/:ledgerId/invoiced", hubBilling_controller_1.markHubOverageInvoicedInternal);
 // Pública: catálogo de planes para la vitrina (solo isPublic)
 router.get("/plans", hubBilling_controller_1.getHubPlansPublic);
 // Protegidas
