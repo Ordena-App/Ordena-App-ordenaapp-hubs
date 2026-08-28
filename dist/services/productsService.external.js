@@ -19,6 +19,10 @@ exports.updateBusinessProduct = updateBusinessProduct;
 exports.deleteBusinessProduct = deleteBusinessProduct;
 exports.setProductHubCategoriesExternal = setProductHubCategoriesExternal;
 exports.listBusinessCategoriesExternal = listBusinessCategoriesExternal;
+exports.listPackageTemplatesExternal = listPackageTemplatesExternal;
+exports.listBusinessProvidersExternal = listBusinessProvidersExternal;
+exports.createBusinessProviderExternal = createBusinessProviderExternal;
+exports.createBusinessCategoryExternal = createBusinessCategoryExternal;
 const axios_1 = __importDefault(require("axios"));
 const buffer_1 = require("buffer");
 const config_1 = require("../config/config");
@@ -77,9 +81,28 @@ function createBusinessProduct(businessId, fields, files) {
         return data;
     });
 }
-function updateBusinessProduct(businessId, productId, patch) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const { data } = yield axios_1.default.patch(`${config_1.PRODUCTS_SERVICE_LINK}/product/${productId}`, patch, { timeout: 15000, headers: headers(businessId) });
+function updateBusinessProduct(businessId_1, productId_1, patch_1) {
+    return __awaiter(this, arguments, void 0, function* (businessId, productId, patch, files = []) {
+        const url = `${config_1.PRODUCTS_SERVICE_LINK}/product/${productId}`;
+        const cfg = { timeout: 30000, headers: headers(businessId) };
+        if (files.length === 0) {
+            const { data } = yield axios_1.default.patch(url, patch, cfg);
+            return data;
+        }
+        // Con imágenes nuevas: el upstream espera multipart con campo 'newImages'.
+        const FormDataCtor = globalThis.FormData;
+        if (!FormDataCtor) {
+            throw new Error("Node >= 18 requerido para subir imágenes (FormData nativo)");
+        }
+        const fd = new FormDataCtor();
+        for (const [key, value] of Object.entries(patch)) {
+            if (value !== undefined && value !== null)
+                fd.append(key, String(value));
+        }
+        for (const f of files) {
+            fd.append("newImages", new buffer_1.Blob([f.buffer], { type: f.mimetype }), f.originalname);
+        }
+        const { data } = yield axios_1.default.patch(url, fd, cfg);
         return data;
     });
 }
@@ -111,5 +134,59 @@ function listBusinessCategoriesExternal(businessId) {
         });
         // El upstream devuelve el array pelado (o {message} cuando no hay ninguna).
         return Array.isArray(data) ? data : [];
+    });
+}
+// ── Editor 1:1 (paridad con el dashboard clásico) ──
+// Estos proxies devuelven el cuerpo del upstream VERBATIM: el adaptador del
+// frontend replica las mismas formas que las funciones de routes.ts del SaaS.
+/** Plantillas de empaque del negocio (envíos). */
+function listPackageTemplatesExternal(businessId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.PRODUCTS_SERVICE_LINK}/package-templates`, {
+            timeout: 15000,
+            headers: headers(businessId),
+            params: { businessId },
+        });
+        return data;
+    });
+}
+/** Proveedores del negocio. */
+function listBusinessProvidersExternal(businessId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.PRODUCTS_SERVICE_LINK}/providerbusiness/${businessId}`, {
+            timeout: 15000,
+            headers: headers(businessId),
+        });
+        return data;
+    });
+}
+/** Crear proveedor (JSON; el logo es opcional y el editor no lo manda). */
+function createBusinessProviderExternal(businessId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.post(`${config_1.PRODUCTS_SERVICE_LINK}/provider`, Object.assign(Object.assign({}, body), { businessId }), { timeout: 15000, headers: headers(businessId) });
+        return data;
+    });
+}
+/** Crear categoría interna del negocio (multipart: imagen opcional). */
+function createBusinessCategoryExternal(businessId, fields, files) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const url = `${config_1.PRODUCTS_SERVICE_LINK}/category`;
+        const cfg = { timeout: 20000, headers: headers(businessId) };
+        if (files.length === 0) {
+            const { data } = yield axios_1.default.post(url, Object.assign(Object.assign({}, fields), { businessId }), cfg);
+            return data;
+        }
+        const FormDataCtor = globalThis.FormData;
+        const fd = new FormDataCtor();
+        fd.append("businessId", businessId);
+        for (const [key, value] of Object.entries(fields)) {
+            if (value !== undefined && value !== null)
+                fd.append(key, String(value));
+        }
+        for (const f of files) {
+            fd.append("image", new buffer_1.Blob([f.buffer], { type: f.mimetype }), f.originalname);
+        }
+        const { data } = yield axios_1.default.post(url, fd, cfg);
+        return data;
     });
 }

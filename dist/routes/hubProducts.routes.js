@@ -43,8 +43,12 @@ function uploadErrorHandler(err, _req, res, next) {
 const router = (0, express_1.Router)();
 router.get("/me/businesses/:businessId/products", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubProducts_controller_1.getMyBusinessProducts);
 router.post("/me/businesses/:businessId/products", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), upload.array("images", 4), uploadErrorHandler, hubProducts_controller_1.createMyBusinessProduct);
-router.patch("/me/businesses/:businessId/products/:productId", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubProducts_controller_1.updateMyBusinessProduct);
+router.patch("/me/businesses/:businessId/products/:productId", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), upload.array("newImages", 4), hubProducts_controller_1.updateMyBusinessProduct);
 router.delete("/me/businesses/:businessId/products/:productId", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubProducts_controller_1.deleteMyBusinessProduct);
 router.patch("/me/products/:productId/hub-categories", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubProducts_controller_1.setMyProductHubCategories);
 router.get("/me/businesses/:businessId/categories", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubProducts_controller_1.getMyBusinessCategories);
+router.get("/me/businesses/:businessId/package-templates", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubProducts_controller_1.getMyBusinessPackageTemplates);
+router.get("/me/businesses/:businessId/providers", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubProducts_controller_1.getMyBusinessProviders);
+router.post("/me/businesses/:businessId/providers", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubProducts_controller_1.createMyBusinessProvider);
+router.post("/me/businesses/:businessId/categories", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), upload.array("image", 1), hubProducts_controller_1.createMyBusinessCategory);
 exports.default = router;

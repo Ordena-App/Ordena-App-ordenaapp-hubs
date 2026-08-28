@@ -76,13 +76,28 @@ export async function createBusinessProduct(
 export async function updateBusinessProduct(
     businessId: string,
     productId: string,
-    patch: Record<string, unknown>
+    patch: Record<string, unknown>,
+    files: UploadedFile[] = []
 ) {
-    const { data } = await axios.patch(
-        `${PRODUCTS_SERVICE_LINK}/product/${productId}`,
-        patch,
-        { timeout: 15000, headers: headers(businessId) }
-    );
+    const url = `${PRODUCTS_SERVICE_LINK}/product/${productId}`;
+    const cfg = { timeout: 30000, headers: headers(businessId) };
+    if (files.length === 0) {
+        const { data } = await axios.patch(url, patch, cfg);
+        return data;
+    }
+    // Con imágenes nuevas: el upstream espera multipart con campo 'newImages'.
+    const FormDataCtor: any = (globalThis as any).FormData;
+    if (!FormDataCtor) {
+        throw new Error("Node >= 18 requerido para subir imágenes (FormData nativo)");
+    }
+    const fd = new FormDataCtor();
+    for (const [key, value] of Object.entries(patch)) {
+        if (value !== undefined && value !== null) fd.append(key, String(value));
+    }
+    for (const f of files) {
+        fd.append("newImages", new Blob([f.buffer as unknown as ArrayBuffer], { type: f.mimetype }), f.originalname);
+    }
+    const { data } = await axios.patch(url, fd, cfg);
     return data;
 }
 
@@ -123,4 +138,63 @@ export async function listBusinessCategoriesExternal(businessId: string) {
     });
     // El upstream devuelve el array pelado (o {message} cuando no hay ninguna).
     return Array.isArray(data) ? data : [];
+}
+
+
+// ── Editor 1:1 (paridad con el dashboard clásico) ──
+// Estos proxies devuelven el cuerpo del upstream VERBATIM: el adaptador del
+// frontend replica las mismas formas que las funciones de routes.ts del SaaS.
+
+/** Plantillas de empaque del negocio (envíos). */
+export async function listPackageTemplatesExternal(businessId: string) {
+    const { data } = await axios.get(`${PRODUCTS_SERVICE_LINK}/package-templates`, {
+        timeout: 15000,
+        headers: headers(businessId),
+        params: { businessId },
+    });
+    return data;
+}
+
+/** Proveedores del negocio. */
+export async function listBusinessProvidersExternal(businessId: string) {
+    const { data } = await axios.get(`${PRODUCTS_SERVICE_LINK}/providerbusiness/${businessId}`, {
+        timeout: 15000,
+        headers: headers(businessId),
+    });
+    return data;
+}
+
+/** Crear proveedor (JSON; el logo es opcional y el editor no lo manda). */
+export async function createBusinessProviderExternal(businessId: string, body: Record<string, unknown>) {
+    const { data } = await axios.post(
+        `${PRODUCTS_SERVICE_LINK}/provider`,
+        { ...body, businessId },
+        { timeout: 15000, headers: headers(businessId) }
+    );
+    return data;
+}
+
+/** Crear categoría interna del negocio (multipart: imagen opcional). */
+export async function createBusinessCategoryExternal(
+    businessId: string,
+    fields: Record<string, unknown>,
+    files: UploadedFile[]
+) {
+    const url = `${PRODUCTS_SERVICE_LINK}/category`;
+    const cfg = { timeout: 20000, headers: headers(businessId) };
+    if (files.length === 0) {
+        const { data } = await axios.post(url, { ...fields, businessId }, cfg);
+        return data;
+    }
+    const FormDataCtor: any = (globalThis as any).FormData;
+    const fd = new FormDataCtor();
+    fd.append("businessId", businessId);
+    for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined && value !== null) fd.append(key, String(value));
+    }
+    for (const f of files) {
+        fd.append("image", new Blob([f.buffer as unknown as ArrayBuffer], { type: f.mimetype }), f.originalname);
+    }
+    const { data } = await axios.post(url, fd, cfg);
+    return data;
 }
