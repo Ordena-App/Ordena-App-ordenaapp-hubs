@@ -90,6 +90,7 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 | `BUSINESS_SERVICE_LINK` | `http://<business-staging>:3002/api` | Con `/api` al final |
 | `ORDERS_SERVICE_LINK` | `http://<orders-staging>:3005/api` | |
 | `PAYMENTS_SERVICE_LINK` | `http://<payments-staging>:3006/api` | |
+| `REPORTS_SERVICE_LINK` | `http://<reportes-staging>:3010/api` | Informes del hub (F3 v2 bloque C) |
 | `PRODUCTS_SERVICE_LINK` | `http://<products-staging>:3004/api` | **Obligatoria** — CRUD de productos del hub + tagging de categorías |
 | `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` | **Obligatorio.** Manda `x-ordena-secret` a business/orders/products Y valida el que le manda orders. (También se acepta `INTERNAL_SHARED_SECRET` por compat.) |
 
@@ -138,6 +139,12 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 | `HUB_APP_CANCEL_URL` | `https://staging.ordena.app/hub-admin/plan?checkout=cancel` *(F3 v2)* |
 
 > F3 v2 además requiere: correr `npx ts-node src/scripts/seedHubPlans.ts` en hubs (una vez por entorno) y crear los prices en Stripe con lookup keys `hub_*` — checklist completo en `F3V2_BILLING.md`.
+
+### ordenaapp-reportes
+
+| Env | Valor staging |
+|---|---|
+| `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` *(F3 v2 bloque C — mismo valor que los demás)* |
 
 ### ordenaapp-frontend
 

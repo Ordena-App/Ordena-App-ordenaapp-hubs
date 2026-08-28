@@ -10,6 +10,7 @@ export const BUSINESS_SERVICE_LINK = process.env.BUSINESS_SERVICE_LINK || 'http:
 export const ORDERS_SERVICE_LINK = process.env.ORDERS_SERVICE_LINK || 'http://localhost:3005/api';
 export const PRODUCTS_SERVICE_LINK = process.env.PRODUCTS_SERVICE_LINK || 'http://localhost:3004/api';
 export const PAYMENTS_SERVICE_LINK = process.env.PAYMENTS_SERVICE_LINK || 'http://localhost:3006/api';
+export const REPORTS_SERVICE_LINK = process.env.REPORTS_SERVICE_LINK || 'http://localhost:3010/api';
 
 // Secreto compartido para llamadas server-to-server (header x-ordena-secret).
 // Se acepta INTERNAL_HUBS_SECRET (nombre canónico, igual que en los receptores

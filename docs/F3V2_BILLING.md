@@ -1,7 +1,7 @@
 # F3 v2 — Facturación de Hubs con Stripe
 
 **Fecha:** 27 de agosto de 2026
-**Estado:** fases 1 y 2 implementadas (planes + suscripción + cobro de excedente + nudge 80% + escalación de mora). Pendiente: reportes de hub en ms-reportes.
+**Estado:** F3 v2 COMPLETA — fases 1, 2 y bloque C (informes). Planes + suscripción + cobro de excedente + nudge 80% + escalación de mora + informes consolidados.
 
 ---
 
@@ -88,8 +88,15 @@ Decisiones cerradas con el usuario: pedido facturable = **creado** · negocios e
 - **Escalación de mora**: `subscription.pastDueSince` lo sella/limpia el PATCH interno; a los 15 días de mora se bloquea SOLO crear negocios y usuarios (403 con `reason: past_due_lock`). Storefronts y pedidos jamás se tocan.
 - El panel `/me/billing` ahora devuelve también `lastLedger` (último período cerrado) para que la factura nunca sorprenda.
 
-## 6. Pendiente
+## 6. Bloque C — Informes (IMPLEMENTADO 27/08/2026)
 
-- Reportes de hub en ms-reportes (`/api/reports/hub/*` con secreto interno) + página `/hub-admin/informes`.
+- **ms-reportes** (primer cambio de ese repo en la rama): `hubReportService` APARTE del de negocios (cero riesgo de regresión), agrupa por `hub_id` con los mismos filtros espejo y `$toDouble` sobre `total_amount`. Rutas `/api/reports/hub/:hubId/overview` y `/customers/summary`, guard `x-ordena-secret` FAIL-CLOSED (el tenantMiddleware de Firebase no aplica), montadas ANTES de las rutas generales.
+- **hubs**: proxy `GET /api/hubs/me/reports/*` con roles de hub (el BUSINESS_VIEWER queda fuera; su resumen vive en el Portal). La zona horaria del cálculo es la del HUB.
+- **frontend**: `/hub-admin/informes` — KPIs con tendencia, serie de ventas, por negocio, top productos, métodos de pago, mejores clientes (7/30/90 días).
+- **Envs nuevas**: reportes → `INTERNAL_HUBS_SECRET` (mismo valor que el resto); hubs → `REPORTS_SERVICE_LINK` (`http://<reportes>:3010/api`).
+
+## 7. Pendiente (menor, no bloquea)
+
 - Sincronía de `quantity` para negocios extra (subscription item con proration) — solo si algún hub escala mucho; el ledger mensual ya los cobra.
 - Script `reapplyHubPlans` para propagar cambios de catálogo a los snapshots.
+- Export CSV/Excel de los informes del hub (los de negocio ya existen; portar cuando se pida).

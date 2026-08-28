@@ -9,6 +9,7 @@ import hubBusinessesRoutes from './routes/hubBusinesses.routes';
 import hubOrdersRoutes from './routes/hubOrders.routes';
 import hubProductsRoutes from './routes/hubProducts.routes';
 import hubBillingRoutes from './routes/hubBilling.routes';
+import hubReportsRoutes from './routes/hubReports.routes';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use(express.urlencoded({ limit: '20mb', extended: true }));
 // que /api/agencies): la autenticación es el JWT propio del servicio, NO Firebase.
 app.use('/api/hub-users', hubUsersRoutes);
 app.use('/api/hubs', hubBillingRoutes);
+app.use('/api/hubs', hubReportsRoutes);
 app.use('/api/hubs', hubOrdersRoutes);
 app.use('/api/hubs', hubProductsRoutes);
 app.use('/api/hubs', hubBusinessesRoutes);
