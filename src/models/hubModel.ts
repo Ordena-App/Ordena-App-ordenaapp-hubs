@@ -9,6 +9,8 @@ const brandingSchema = new Schema(
         gradientFrom: { type: String },
         gradientTo: { type: String },
         bannerUrl: { type: String },
+        // Toggle del banner en el hero del storefront (ausente = mostrar)
+        bannerEnabled: { type: Boolean },
     },
     { _id: false }
 );
@@ -177,6 +179,7 @@ export interface IHub extends Document {
         gradientFrom?: string;
         gradientTo?: string;
         bannerUrl?: string;
+        bannerEnabled?: boolean;
     };
     contact: {
         email?: string;

@@ -9,6 +9,8 @@ const brandingSchema = new mongoose_1.Schema({
     gradientFrom: { type: String },
     gradientTo: { type: String },
     bannerUrl: { type: String },
+    // Toggle del banner en el hero del storefront (ausente = mostrar)
+    bannerEnabled: { type: Boolean },
 }, { _id: false });
 const contactSchema = new mongoose_1.Schema({
     email: { type: String },
