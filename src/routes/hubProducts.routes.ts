@@ -6,6 +6,11 @@ import {
     updateMyBusinessProduct,
     deleteMyBusinessProduct,
     setMyProductHubCategories,
+    getMyBusinessCategories,
+    getMyBusinessPackageTemplates,
+    getMyBusinessProviders,
+    createMyBusinessProvider,
+    createMyBusinessCategory,
 } from "../controllers/hubProducts.controller";
 import { verifyHubJWT, requireHubRole } from "../utils/auth";
 
@@ -61,7 +66,8 @@ router.post(
 router.patch(
     "/me/businesses/:businessId/products/:productId",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN"),
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    upload.array("newImages", 4),
     updateMyBusinessProduct
 );
 router.delete(
@@ -75,6 +81,39 @@ router.patch(
     verifyHubJWT,
     requireHubRole("HUB_OWNER", "HUB_ADMIN"),
     setMyProductHubCategories
+);
+
+router.get(
+    "/me/businesses/:businessId/categories",
+    verifyHubJWT,
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    getMyBusinessCategories
+);
+
+router.get(
+    "/me/businesses/:businessId/package-templates",
+    verifyHubJWT,
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    getMyBusinessPackageTemplates
+);
+router.get(
+    "/me/businesses/:businessId/providers",
+    verifyHubJWT,
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    getMyBusinessProviders
+);
+router.post(
+    "/me/businesses/:businessId/providers",
+    verifyHubJWT,
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    createMyBusinessProvider
+);
+router.post(
+    "/me/businesses/:businessId/categories",
+    verifyHubJWT,
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    upload.array("image", 1),
+    createMyBusinessCategory
 );
 
 export default router;
