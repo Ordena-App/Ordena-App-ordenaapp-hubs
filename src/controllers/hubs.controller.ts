@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import hubModel from "../models/hubModel";
 import hubCategoryModel from "../models/hubCategoryModel";
 import { INTERNAL_SHARED_SECRET } from "../config/config";
+import { propagateHubStorefrontThemeExternal } from "../services/businessService.external";
 
 /**
  * GET /api/hubs/resolve?slug=oe-ya
@@ -204,6 +205,31 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
         patch["updated_at"] = new Date();
 
         const hub = await hubModel.findByIdAndUpdate(ctx.hubId, { $set: patch }, { new: true });
+
+        // Herencia de branding: si cambió el color primario del hub, el tema del
+        // storefront de TODOS sus negocios se re-sincroniza (los negocios de hub
+        // no editan su tienda; el branding del hub es su fuente de verdad).
+        // Best-effort: si business-service no responde, el update del hub ya quedó.
+        const brandingTouched =
+            patch["branding.primaryColor"] !== undefined ||
+            patch["branding.primaryForeground"] !== undefined;
+        const primaryColor = hub?.branding?.primaryColor;
+        if (brandingTouched && hub && primaryColor) {
+            try {
+                await propagateHubStorefrontThemeExternal(String(ctx.hubId), {
+                    primaryColor: String(primaryColor),
+                    primaryForeground: hub.branding?.primaryForeground
+                        ? String(hub.branding.primaryForeground)
+                        : undefined,
+                });
+            } catch (propagateError) {
+                console.error(
+                    "No se pudo propagar el branding a los negocios del hub:",
+                    propagateError instanceof Error ? propagateError.message : propagateError
+                );
+            }
+        }
+
         return res.status(200).json({
             status: true,
             statusCode: 200,

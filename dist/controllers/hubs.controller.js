@@ -22,6 +22,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const hubCategoryModel_1 = __importDefault(require("../models/hubCategoryModel"));
 const config_1 = require("../config/config");
+const businessService_external_1 = require("../services/businessService.external");
 /**
  * GET /api/hubs/resolve?slug=oe-ya
  * PÚBLICO — lo consumen el middleware del frontend y el storefront del hub
@@ -189,6 +190,7 @@ const UPDATABLE_FIELDS = [
 /** PUT /api/hubs/me  (HUB_OWNER/HUB_ADMIN) */
 function updateMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
         try {
             const ctx = req.hubContext;
             // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
@@ -220,6 +222,26 @@ function updateMyHub(req, res) {
             }
             patch["updated_at"] = new Date();
             const hub = yield hubModel_1.default.findByIdAndUpdate(ctx.hubId, { $set: patch }, { new: true });
+            // Herencia de branding: si cambió el color primario del hub, el tema del
+            // storefront de TODOS sus negocios se re-sincroniza (los negocios de hub
+            // no editan su tienda; el branding del hub es su fuente de verdad).
+            // Best-effort: si business-service no responde, el update del hub ya quedó.
+            const brandingTouched = patch["branding.primaryColor"] !== undefined ||
+                patch["branding.primaryForeground"] !== undefined;
+            const primaryColor = (_a = hub === null || hub === void 0 ? void 0 : hub.branding) === null || _a === void 0 ? void 0 : _a.primaryColor;
+            if (brandingTouched && hub && primaryColor) {
+                try {
+                    yield (0, businessService_external_1.propagateHubStorefrontThemeExternal)(String(ctx.hubId), {
+                        primaryColor: String(primaryColor),
+                        primaryForeground: ((_b = hub.branding) === null || _b === void 0 ? void 0 : _b.primaryForeground)
+                            ? String(hub.branding.primaryForeground)
+                            : undefined,
+                    });
+                }
+                catch (propagateError) {
+                    console.error("No se pudo propagar el branding a los negocios del hub:", propagateError instanceof Error ? propagateError.message : propagateError);
+                }
+            }
             return res.status(200).json({
                 status: true,
                 statusCode: 200,

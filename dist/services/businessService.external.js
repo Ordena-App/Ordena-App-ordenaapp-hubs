@@ -20,6 +20,7 @@ exports.patchBusinessInternal = patchBusinessInternal;
 exports.getBusinessSettingsExternal = getBusinessSettingsExternal;
 exports.patchBusinessWeeklyHours = patchBusinessWeeklyHours;
 exports.uploadBusinessLogoExternal = uploadBusinessLogoExternal;
+exports.propagateHubStorefrontThemeExternal = propagateHubStorefrontThemeExternal;
 exports.addHubDomainExternal = addHubDomainExternal;
 exports.hubDomainStatusExternal = hubDomainStatusExternal;
 const axios_1 = __importDefault(require("axios"));
@@ -113,6 +114,17 @@ function uploadBusinessLogoExternal(businessId, file) {
         const fd = new FormDataCtor();
         fd.append("image", new Blob([file.buffer], { type: file.mimetype }), file.originalname);
         const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/business/${businessId}/hub-logo`, fd, { timeout: 30000, headers: internalHeaders({ "x-business-id": businessId }) });
+        return data;
+    });
+}
+/**
+ * Propaga el branding del hub al tema del storefront de TODOS sus negocios
+ * (storefrontButtonTheme.global). Complemento de la siembra al crear: cubre
+ * negocios anteriores a la siembra y cambios de color posteriores del hub.
+ */
+function propagateHubStorefrontThemeExternal(hubId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/storefront-theme`, body, { timeout: 20000, headers: internalHeaders() });
         return data;
     });
 }
