@@ -135,6 +135,23 @@ export async function uploadBusinessLogoExternal(
 }
 
 
+/**
+ * Propaga el branding del hub al tema del storefront de TODOS sus negocios
+ * (storefrontButtonTheme.global). Complemento de la siembra al crear: cubre
+ * negocios anteriores a la siembra y cambios de color posteriores del hub.
+ */
+export async function propagateHubStorefrontThemeExternal(
+    hubId: string,
+    body: { primaryColor: string; primaryForeground?: string }
+) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/storefront-theme`,
+        body,
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
 // ── Dominio custom del hub (F4): proxies de Vercel via business ──
 export async function addHubDomainExternal(domain: string) {
     const { data } = await axios.post(
