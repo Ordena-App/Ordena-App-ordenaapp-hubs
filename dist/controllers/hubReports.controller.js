@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMyHubReportOverview = getMyHubReportOverview;
 exports.getMyHubReportCustomers = getMyHubReportCustomers;
+exports.getMyHubReportVisits = getMyHubReportVisits;
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const reportsService_external_1 = require("../services/reportsService.external");
 function upstreamError(res, error, action) {
@@ -68,6 +69,20 @@ function getMyHubReportCustomers(req, res) {
         }
         catch (error) {
             return upstreamError(res, error, "cargar los clientes del hub");
+        }
+    });
+}
+/** GET /api/hubs/me/reports/visits  (roles de hub) — tráfico consolidado */
+function getMyHubReportVisits(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const ctx = req.hubContext;
+        try {
+            const query = yield buildQuery(req, ctx.hubId);
+            const resp = yield (0, reportsService_external_1.getHubReportVisits)(ctx.hubId, query);
+            return res.status(200).json(resp);
+        }
+        catch (error) {
+            return upstreamError(res, error, "cargar las visitas del hub");
         }
     });
 }

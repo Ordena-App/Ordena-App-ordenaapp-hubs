@@ -33,3 +33,12 @@ export async function getHubReportCustomers(hubId: string, query: HubReportQuery
     });
     return data;
 }
+
+export async function getHubReportVisits(hubId: string, query: HubReportQuery) {
+    const { data } = await axios.get(`${REPORTS_SERVICE_LINK}/reports/hub/${hubId}/visits`, {
+        timeout: 30000,
+        headers: headers(),
+        params: query,
+    });
+    return data;
+}
