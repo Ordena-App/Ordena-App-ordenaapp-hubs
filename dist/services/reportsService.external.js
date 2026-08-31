@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getHubReportOverview = getHubReportOverview;
 exports.getHubReportCustomers = getHubReportCustomers;
+exports.getHubReportVisits = getHubReportVisits;
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("../config/config");
 // Reportes consolidados del hub (F3 v2 bloque C): las agregaciones viven en
@@ -35,6 +36,16 @@ function getHubReportOverview(hubId, query) {
 function getHubReportCustomers(hubId, query) {
     return __awaiter(this, void 0, void 0, function* () {
         const { data } = yield axios_1.default.get(`${config_1.REPORTS_SERVICE_LINK}/reports/hub/${hubId}/customers/summary`, {
+            timeout: 30000,
+            headers: headers(),
+            params: query,
+        });
+        return data;
+    });
+}
+function getHubReportVisits(hubId, query) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.REPORTS_SERVICE_LINK}/reports/hub/${hubId}/visits`, {
             timeout: 30000,
             headers: headers(),
             params: query,

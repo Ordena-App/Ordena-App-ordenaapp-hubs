@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { getMyHubReportOverview, getMyHubReportCustomers } from "../controllers/hubReports.controller";
+import {
+    getMyHubReportOverview,
+    getMyHubReportCustomers,
+    getMyHubReportVisits,
+} from "../controllers/hubReports.controller";
 import { verifyHubJWT, requireHubRole } from "../utils/auth";
 
 const router = Router();
@@ -17,6 +21,12 @@ router.get(
     verifyHubJWT,
     requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
     getMyHubReportCustomers
+);
+router.get(
+    "/me/reports/visits",
+    verifyHubJWT,
+    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    getMyHubReportVisits
 );
 
 export default router;

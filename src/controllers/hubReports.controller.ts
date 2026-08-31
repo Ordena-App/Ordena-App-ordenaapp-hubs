@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import hubModel from "../models/hubModel";
-import { getHubReportOverview, getHubReportCustomers, HubReportQuery } from "../services/reportsService.external";
+import {
+    getHubReportOverview,
+    getHubReportCustomers,
+    getHubReportVisits,
+    HubReportQuery,
+} from "../services/reportsService.external";
 
 function upstreamError(res: Response, error: any, action: string): Response {
     const upstreamStatus = error?.response?.status;
@@ -49,5 +54,17 @@ export async function getMyHubReportCustomers(req: Request, res: Response): Prom
         return res.status(200).json(resp);
     } catch (error: any) {
         return upstreamError(res, error, "cargar los clientes del hub");
+    }
+}
+
+/** GET /api/hubs/me/reports/visits  (roles de hub) — tráfico consolidado */
+export async function getMyHubReportVisits(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const query = await buildQuery(req, ctx.hubId);
+        const resp = await getHubReportVisits(ctx.hubId, query);
+        return res.status(200).json(resp);
+    } catch (error: any) {
+        return upstreamError(res, error, "cargar las visitas del hub");
     }
 }
