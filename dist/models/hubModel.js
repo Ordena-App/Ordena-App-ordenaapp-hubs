@@ -11,6 +11,9 @@ const brandingSchema = new mongoose_1.Schema({
     bannerUrl: { type: String },
     // Toggle del banner en el hero del storefront (ausente = mostrar)
     bannerEnabled: { type: Boolean },
+    // Negocios por fila en el storefront movil: 1 (tarjeta ancha, default)
+    // o 2 (mitad y mitad). En pantallas grandes la grilla no cambia.
+    businessesMobileColumns: { type: Number },
 }, { _id: false });
 const contactSchema = new mongoose_1.Schema({
     email: { type: String },
