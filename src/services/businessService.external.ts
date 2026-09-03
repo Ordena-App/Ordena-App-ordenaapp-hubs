@@ -39,6 +39,8 @@ export interface CreateHubBusinessPayload {
     region_settings: { country: string; currency: string; language?: "ES" | "EN" };
     /** Branding del hub: el storefront del negocio nace con estos colores. */
     branding?: { primaryColor?: string; primaryForeground?: string };
+    /** deliveryDefaults del hub: el checkout del negocio nace con este prefill. */
+    default_delivery_location?: { state?: string | null; stateIso?: string | null; city?: string | null };
 }
 
 export async function createHubBusiness(payload: CreateHubBusinessPayload) {
@@ -146,6 +148,23 @@ export async function propagateHubStorefrontThemeExternal(
 ) {
     const { data } = await axios.patch(
         `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/storefront-theme`,
+        body,
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
+/**
+ * Propaga la ubicación de entrega por defecto del hub (deliveryDefaults) a
+ * delivery_options.default_delivery_location de TODOS sus negocios. Con body
+ * vacío limpia el prefill. Complemento de la siembra al crear.
+ */
+export async function propagateHubDeliveryDefaultsExternal(
+    hubId: string,
+    body: { state?: string | null; stateIso?: string | null; city?: string | null }
+) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/delivery-defaults`,
         body,
         { timeout: 20000, headers: internalHeaders() }
     );

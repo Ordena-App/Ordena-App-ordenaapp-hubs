@@ -21,6 +21,7 @@ exports.getBusinessSettingsExternal = getBusinessSettingsExternal;
 exports.patchBusinessWeeklyHours = patchBusinessWeeklyHours;
 exports.uploadBusinessLogoExternal = uploadBusinessLogoExternal;
 exports.propagateHubStorefrontThemeExternal = propagateHubStorefrontThemeExternal;
+exports.propagateHubDeliveryDefaultsExternal = propagateHubDeliveryDefaultsExternal;
 exports.addHubDomainExternal = addHubDomainExternal;
 exports.hubDomainStatusExternal = hubDomainStatusExternal;
 const axios_1 = __importDefault(require("axios"));
@@ -125,6 +126,17 @@ function uploadBusinessLogoExternal(businessId, file) {
 function propagateHubStorefrontThemeExternal(hubId, body) {
     return __awaiter(this, void 0, void 0, function* () {
         const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/storefront-theme`, body, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+/**
+ * Propaga la ubicación de entrega por defecto del hub (deliveryDefaults) a
+ * delivery_options.default_delivery_location de TODOS sus negocios. Con body
+ * vacío limpia el prefill. Complemento de la siembra al crear.
+ */
+function propagateHubDeliveryDefaultsExternal(hubId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/delivery-defaults`, body, { timeout: 20000, headers: internalHeaders() });
         return data;
     });
 }

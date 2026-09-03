@@ -50,7 +50,7 @@ function upstreamError(res, error, action) {
  */
 function createBusinessForMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e, _f;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
         const ctx = req.hubContext;
         try {
             const { name, slug, description, industry, country_code, phone, email, address, region_settings } = req.body || {};
@@ -102,7 +102,7 @@ function createBusinessForMyHub(req, res) {
                 console.log(`[hub ${ctx.hubId}] negocio extra: ${currentCount + 1} de ${included} incluidos ` +
                     "(se factura como excedente, no se bloquea)");
             }
-            const created = yield (0, businessService_external_1.createHubBusiness)(Object.assign({ hubId: ctx.hubId, name,
+            const created = yield (0, businessService_external_1.createHubBusiness)(Object.assign(Object.assign({ hubId: ctx.hubId, name,
                 slug,
                 description,
                 industry,
@@ -120,13 +120,21 @@ function createBusinessForMyHub(req, res) {
                         primaryForeground: hub.branding.primaryForeground,
                     },
                 }
+                : {})), (((_f = hub.deliveryDefaults) === null || _f === void 0 ? void 0 : _f.state) || ((_g = hub.deliveryDefaults) === null || _g === void 0 ? void 0 : _g.city)
+                ? {
+                    default_delivery_location: {
+                        state: (_h = hub.deliveryDefaults.state) !== null && _h !== void 0 ? _h : null,
+                        stateIso: (_j = hub.deliveryDefaults.stateIso) !== null && _j !== void 0 ? _j : null,
+                        city: (_k = hub.deliveryDefaults.city) !== null && _k !== void 0 ? _k : null,
+                    },
+                }
                 : {})));
             yield hubModel_1.default.updateOne({ _id: ctx.hubId }, { $inc: { "usageMetrics.businessesCount": 1 }, $set: { updated_at: new Date() } });
             return res.status(201).json({
                 status: true,
                 statusCode: 201,
                 message: "Negocio creado correctamente",
-                data: (_f = created === null || created === void 0 ? void 0 : created.data) !== null && _f !== void 0 ? _f : created,
+                data: (_l = created === null || created === void 0 ? void 0 : created.data) !== null && _l !== void 0 ? _l : created,
             });
         }
         catch (error) {
