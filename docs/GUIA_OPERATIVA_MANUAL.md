@@ -1,9 +1,10 @@
 # Guía operativa — pasos manuales para staging/producción (Modo Multi-Negocio)
 
-**Fecha:** 2026-09-01 · **Alcance:** todo lo que NO se hace con código: Meta (WhatsApp),
-Stripe, Vercel/DNS, variables de entorno, seed de Mongo y orden de despliegue.
-Cada dato de esta guía fue verificado contra el código de los repos (rama
-`feature/new-mode-ordena-hub`).
+**Fecha:** 2026-09-01 · **Actualizada:** 2026-09-03 (estado git real + feature de
+prefill de dirección) · **Alcance:** todo lo que NO se hace con código: Meta
+(WhatsApp), Stripe, Vercel/DNS, variables de entorno, seed de Mongo y orden de
+despliegue. Cada dato de esta guía fue verificado contra el código de los repos
+(rama `feature/new-mode-ordena-hub`).
 
 **Orden recomendado:** §1 secreto → §2 envs → §3 deploy → §4 seed Mongo →
 §5 Stripe → §6 Meta → §7 Vercel/DNS → §8 smoke test.
@@ -94,15 +95,18 @@ por wildcard interno — no hay que listarlos en `ALLOWED_CORE_ORIGINS`.
 
 ## 3. Push, merge y despliegue
 
-**Estado real (verificado con git el 2026-09-01):**
+**Estado real (verificado con git el 2026-09-03):**
 
-- Falta **pushear**: `ordenaapp-frontend` (18 commits) y `ordenaapp-orders`
-  (1 commit nuevo de hoy: `90f4e5c`, fix de los links de las plantillas —
-  **desplegarlo ANTES de registrar las plantillas en Meta**).
-- Los 9 repos tienen TODO el trabajo en `feature/new-mode-ordena-hub` **sin
-  mergear a main**: hubs 21 commits por delante, business ~20, orders ~11,
-  gateway 8, payments 6, products 3, reportes 3, whatsapp-bot 2 (solo docs),
-  frontend 36.
+- Falta **pushear** (todo en `feature/new-mode-ordena-hub`):
+  - `ordenaapp-frontend`: 1 commit (`35006818`, prefill de dirección).
+  - `ordenaapp-business`: 1 commit (`4e3a2b8`, prefill + modo manual hub).
+  - `ordenaapp-hubs`: los commits desde `994756e` (precios Piloto `26c9d83`/`a1ffd8e`,
+    prefill `eab3065` y esta guía).
+  - `ordenaapp-orders`: 1 commit (`90f4e5c`, fix de los links de las plantillas —
+    **desplegarlo ANTES de registrar las plantillas en Meta**).
+- Ya pusheados en su feature branch (solo falta PR + deploy): `api-gateway`
+  (con los 3 fixes CORS), `products-and-categories`, `payments`, `reportes`.
+- Los 9 repos siguen **sin mergear a main** (PRs pendientes en todos).
 - Antes de abrir PR en `ordenaapp-business` y `ordenaapp-orders`: `git fetch`
   (su `origin/main` local está desactualizado frente a GitHub — puede haber
   conflictos con lo que otros mergearon).
@@ -114,6 +118,13 @@ por wildcard interno — no hay que listarlos en `ALLOWED_CORE_ORIGINS`.
 3. `ordenaapp-api-gateway` — incluye los 3 fixes CORS (`3e70fb9`, `49d46ed`,
    `a594622`) sin los cuales el dev local contra el gateway falla.
 4. `ordenaapp-frontend` (Vercel).
+
+⚠️ **Orden OBLIGATORIO business → frontend** (feature de prefill de dirección):
+si el frontend sale con el `ordenaapp-business` viejo, mongoose descarta
+`default_delivery_location` en silencio — el botón "Guardar ubicación" del
+dashboard muestra éxito sin persistir nada. No rompe nada, pero la sección
+nueva funciona "en falso" hasta desplegar business. El resto de repos no
+tiene acoplamiento de orden entre sí (hubs↔business se hablan best-effort).
 
 ---
 
@@ -383,6 +394,12 @@ En orden — cada punto valida una pieza de la configuración:
 10. Excedente: en Stripe test, adelantar el reloj de la suscripción o usar
     `stripe trigger invoice.upcoming` y verificar el invoice item (→ §5.2).
 11. Dominio custom con un dominio de prueba (→ §7.2).
+12. Prefill de dirección: `/hub-admin/ajustes` → sección **Zona de entrega** →
+    elegir Departamento y Ciudad → guardar → abrir el checkout de un negocio
+    del hub: el formulario manual llega con país + departamento + ciudad ya
+    puestos y editables (→ business desplegado ANTES que frontend, §3).
+    Extra SaaS: en el dashboard clásico, Ajustes → Delivery → "Ubicación de
+    entrega por defecto" hace lo mismo para un negocio normal.
 
 ---
 
