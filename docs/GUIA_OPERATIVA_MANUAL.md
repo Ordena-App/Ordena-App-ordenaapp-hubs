@@ -132,8 +132,8 @@ Es idempotente (upsert por `code`). Crea:
 |---|---|---|
 | Precio exhibición | $149/mes | $199/mes |
 | lookupKeys | `hub_piloto_monthly_v1`, `hub_piloto_monthly_v2` | `hub_standard_monthly_v1` |
-| Negocios incluidos | 25 | 20 |
-| Pedidos/mes | 2,500 | 2,000 |
+| Negocios incluidos | 20 | 20 |
+| Pedidos/mes | 1,800 | 2,000 |
 | Negocio extra | $5 | $8 |
 | Pedido extra | $0.05 | $0.08 |
 | Visible en vitrina | **no** (isPublic:false) | sí |
@@ -208,7 +208,7 @@ webhook resuelve el hub por `subscription.metadata.hubId` primero (fallback:
    Stripe transiciona sola en el mes 7; como ambos lookup keys apuntan al
    MISMO plan (`HUB_PILOTO`), los límites no cambian y no hay código que tocar.
 6. Verificación: en cuanto el webhook procese `customer.subscription.created/
-   updated`, `/hub-admin/plan` de Oe Ya muestra 25 negocios / 2,500 pedidos.
+   updated`, `/hub-admin/plan` de Oe Ya muestra 20 negocios / 1,800 pedidos.
 
 *(Alternativa si se prefiere que pague desde la UI: fix de `trialDays` en el
 checkout + `isPublic:true` temporal — pendiente en §9.)*
@@ -314,7 +314,7 @@ Revisa tu uso y tu plan desde el enlace.
 ```
 **Botón:** URL dinámica · texto `Ver mi plan` · URL `https://ordena.app/{{1}}`
 (sufijo real: `hub-admin/plan`).
-**Ejemplos:** 1 `Oe Ya Courier` · 2 `2000` · 3 `2500`.
+**Ejemplos:** 1 `Oe Ya Courier` · 2 `1500` · 3 `1800`.
 *Nota: el body arranca con el emoji antes de `{{1}}`, así que cumple la regla
 de Meta de no EMPEZAR con variable. Si aun así la rechazara, antepón
 `Hola — ` y listo (no requiere cambio de código).*

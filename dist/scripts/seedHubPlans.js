@@ -38,8 +38,11 @@ const PLANS = [
         billingCycle: "monthly",
         lookupKeys: ["hub_piloto_monthly_v1", "hub_piloto_monthly_v2"],
         limits: {
-            businessesIncluded: 25,
-            ordersPerMonth: 2500,
+            // Alineado a la operacion real de Oe Ya (~20 negocios, ~1,800
+            // pedidos/mes): el crecimiento por encima se factura como
+            // excedente en vez de regalarse dentro del incluido.
+            businessesIncluded: 20,
+            ordersPerMonth: 1800,
             extraBusinessPrice: 5,
             extraOrderPrice: 0.05,
             businessesHardCap: 100,
