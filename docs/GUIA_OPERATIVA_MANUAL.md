@@ -412,6 +412,12 @@ En orden — cada punto valida una pieza de la configuración:
     puestos y editables (→ business desplegado ANTES que frontend, §3).
     Extra SaaS: en el dashboard clásico, Ajustes → Delivery → "Ubicación de
     entrega por defecto" hace lo mismo para un negocio normal.
+13. Métodos de entrega: `/hub-admin/ajustes` → sección **Métodos de entrega**
+    (Delivery / Recoger en local + tarifa) → guardar → el checkout de TODOS
+    los negocios del hub ofrece exactamente esos métodos con esa tarifa.
+    ⚠️ Los negocios de hub creados ANTES de este deploy nacieron con delivery
+    apagado: basta con **guardar Ajustes una vez** tras el deploy para que la
+    propagación los sincronice (no hay backfill automático).
 
 ---
 

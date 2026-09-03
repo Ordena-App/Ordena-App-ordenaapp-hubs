@@ -100,6 +100,16 @@ const hubSchema = new mongoose_1.Schema({
         stateIso: { type: String, default: null },
         city: { type: String, default: null },
     },
+    // ---- Métodos de entrega del checkout (fulfillment) ----
+    // El hub decide qué ofrecen TODOS sus negocios en el checkout: delivery
+    // propio (el operador reparte), recogida en local, y la tarifa plana del
+    // delivery. Se propaga a delivery_options de los negocios HUB_MANAGED
+    // (own_delivery / onSite / delivery), que no tienen dashboard propio.
+    fulfillment: {
+        deliveryEnabled: { type: Boolean, default: true },
+        pickupEnabled: { type: Boolean, default: true },
+        deliveryFee: { type: Number, default: 0 },
+    },
     // Zona horaria del hub: cálculos de apertura, estadísticas y rotación de
     // métricas la respetan. Cada Business mantiene además su propio horario.
     timezone: { type: String, default: "America/El_Salvador" },

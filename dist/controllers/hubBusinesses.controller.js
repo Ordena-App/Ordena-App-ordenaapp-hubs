@@ -50,7 +50,7 @@ function upstreamError(res, error, action) {
  */
 function createBusinessForMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
         const ctx = req.hubContext;
         try {
             const { name, slug, description, industry, country_code, phone, email, address, region_settings } = req.body || {};
@@ -102,7 +102,7 @@ function createBusinessForMyHub(req, res) {
                 console.log(`[hub ${ctx.hubId}] negocio extra: ${currentCount + 1} de ${included} incluidos ` +
                     "(se factura como excedente, no se bloquea)");
             }
-            const created = yield (0, businessService_external_1.createHubBusiness)(Object.assign(Object.assign({ hubId: ctx.hubId, name,
+            const created = yield (0, businessService_external_1.createHubBusiness)(Object.assign(Object.assign(Object.assign({ hubId: ctx.hubId, name,
                 slug,
                 description,
                 industry,
@@ -128,13 +128,22 @@ function createBusinessForMyHub(req, res) {
                         city: (_k = hub.deliveryDefaults.city) !== null && _k !== void 0 ? _k : null,
                     },
                 }
-                : {})));
+                : {})), { 
+                // Métodos de entrega del hub: el checkout nace ofreciendo lo que el
+                // operador decidió (default: delivery + recogida, tarifa 0).
+                fulfillment: {
+                    deliveryEnabled: ((_l = hub.fulfillment) === null || _l === void 0 ? void 0 : _l.deliveryEnabled) !== false,
+                    pickupEnabled: ((_m = hub.fulfillment) === null || _m === void 0 ? void 0 : _m.pickupEnabled) !== false,
+                    deliveryFee: typeof ((_o = hub.fulfillment) === null || _o === void 0 ? void 0 : _o.deliveryFee) === "number" && hub.fulfillment.deliveryFee >= 0
+                        ? hub.fulfillment.deliveryFee
+                        : 0,
+                } }));
             yield hubModel_1.default.updateOne({ _id: ctx.hubId }, { $inc: { "usageMetrics.businessesCount": 1 }, $set: { updated_at: new Date() } });
             return res.status(201).json({
                 status: true,
                 statusCode: 201,
                 message: "Negocio creado correctamente",
-                data: (_l = created === null || created === void 0 ? void 0 : created.data) !== null && _l !== void 0 ? _l : created,
+                data: (_p = created === null || created === void 0 ? void 0 : created.data) !== null && _p !== void 0 ? _p : created,
             });
         }
         catch (error) {

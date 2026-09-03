@@ -187,17 +187,18 @@ const UPDATABLE_FIELDS = [
     "language",
     "businessVisibility",
     "deliveryDefaults",
+    "fulfillment",
 ];
 /** PUT /api/hubs/me  (HUB_OWNER/HUB_ADMIN) */
 function updateMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e, _f, _g, _h;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
         try {
             const ctx = req.hubContext;
             // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
             // claves ya no borra las demás (antes el $set del objeto entero se
             // llevaba por delante deliveryWhatsapp, email, tiktok…).
-            const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults"]);
+            const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment"]);
             const patch = {};
             for (const field of UPDATABLE_FIELDS) {
                 const value = req.body ? req.body[field] : undefined;
@@ -207,14 +208,41 @@ function updateMyHub(req, res) {
                     for (const [key, inner] of Object.entries(value)) {
                         if (inner === undefined)
                             continue;
-                        // deliveryDefaults: solo string|null — un objeto/array aquí
-                        // sería CastError→500 y además viajaría crudo a business-service.
-                        if (field === "deliveryDefaults" && inner !== null && typeof inner !== "string")
-                            continue;
+                        // deliveryDefaults: solo sus 3 claves y solo string|null —
+                        // un typo o un objeto aquí sería un 200 mentiroso (mongoose
+                        // strict lo descarta) o CastError→500, y dispararía la
+                        // propagación sin haber cambiado nada.
+                        if (field === "deliveryDefaults") {
+                            if (!["state", "stateIso", "city"].includes(key))
+                                continue;
+                            if (inner !== null && typeof inner !== "string")
+                                continue;
+                        }
+                        // fulfillment: solo sus 3 claves; booleanos + fee número >= 0.
+                        if (field === "fulfillment") {
+                            if (!["deliveryEnabled", "pickupEnabled", "deliveryFee"].includes(key))
+                                continue;
+                            if (key === "deliveryFee") {
+                                if (typeof inner !== "number" || !Number.isFinite(inner) || inner < 0)
+                                    continue;
+                            }
+                            else if (typeof inner !== "boolean") {
+                                continue;
+                            }
+                        }
                         patch[`${field}.${key}`] = inner;
                     }
+                    // Regla "mínimo un método": ambos apagados en el mismo body no
+                    // es un estado operable — se restaura la recogida (mismo
+                    // fail-open que sanitizeHubFulfillment en business-service,
+                    // para que hub y negocios nunca diverjan).
+                    if (field === "fulfillment" &&
+                        patch["fulfillment.deliveryEnabled"] === false &&
+                        patch["fulfillment.pickupEnabled"] === false) {
+                        patch["fulfillment.pickupEnabled"] = true;
+                    }
                 }
-                else if (field === "deliveryDefaults") {
+                else if (field === "deliveryDefaults" || field === "fulfillment") {
                     // Solo se acepta como objeto: un `deliveryDefaults: null` crudo
                     // actualizaría el hub sin disparar la propagación (el hook
                     // detecta claves con punto) y dejaría los negocios desfasados.
@@ -268,6 +296,22 @@ function updateMyHub(req, res) {
                 }
                 catch (propagateError) {
                     console.error("No se pudo propagar la ubicación de entrega a los negocios del hub:", propagateError instanceof Error ? propagateError.message : propagateError);
+                }
+            }
+            // Métodos de entrega (fulfillment): mismo patrón best-effort.
+            const fulfillmentTouched = Object.keys(patch).some((k) => k.startsWith("fulfillment."));
+            if (fulfillmentTouched && hub) {
+                try {
+                    yield (0, businessService_external_1.propagateHubFulfillmentExternal)(String(ctx.hubId), {
+                        deliveryEnabled: ((_j = hub.fulfillment) === null || _j === void 0 ? void 0 : _j.deliveryEnabled) !== false,
+                        pickupEnabled: ((_k = hub.fulfillment) === null || _k === void 0 ? void 0 : _k.pickupEnabled) !== false,
+                        deliveryFee: typeof ((_l = hub.fulfillment) === null || _l === void 0 ? void 0 : _l.deliveryFee) === "number" && hub.fulfillment.deliveryFee >= 0
+                            ? hub.fulfillment.deliveryFee
+                            : 0,
+                    });
+                }
+                catch (propagateError) {
+                    console.error("No se pudieron propagar los métodos de entrega a los negocios del hub:", propagateError instanceof Error ? propagateError.message : propagateError);
                 }
             }
             return res.status(200).json({

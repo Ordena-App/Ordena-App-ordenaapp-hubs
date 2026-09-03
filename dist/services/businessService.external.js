@@ -22,6 +22,7 @@ exports.patchBusinessWeeklyHours = patchBusinessWeeklyHours;
 exports.uploadBusinessLogoExternal = uploadBusinessLogoExternal;
 exports.propagateHubStorefrontThemeExternal = propagateHubStorefrontThemeExternal;
 exports.propagateHubDeliveryDefaultsExternal = propagateHubDeliveryDefaultsExternal;
+exports.propagateHubFulfillmentExternal = propagateHubFulfillmentExternal;
 exports.addHubDomainExternal = addHubDomainExternal;
 exports.hubDomainStatusExternal = hubDomainStatusExternal;
 const axios_1 = __importDefault(require("axios"));
@@ -137,6 +138,16 @@ function propagateHubStorefrontThemeExternal(hubId, body) {
 function propagateHubDeliveryDefaultsExternal(hubId, body) {
     return __awaiter(this, void 0, void 0, function* () {
         const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/delivery-defaults`, body, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+/**
+ * Propaga los métodos de entrega del hub (fulfillment) al checkout de TODOS
+ * sus negocios: delivery_options.{own_delivery, onSite, delivery(tarifa)}.
+ */
+function propagateHubFulfillmentExternal(hubId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/fulfillment`, body, { timeout: 20000, headers: internalHeaders() });
         return data;
     });
 }
