@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import hubModel from "../models/hubModel";
 import hubCategoryModel from "../models/hubCategoryModel";
 import { INTERNAL_SHARED_SECRET } from "../config/config";
-import { propagateHubStorefrontThemeExternal } from "../services/businessService.external";
+import { propagateHubStorefrontThemeExternal, propagateHubDeliveryDefaultsExternal } from "../services/businessService.external";
 
 /**
  * GET /api/hubs/resolve?slug=oe-ya
@@ -172,6 +172,7 @@ const UPDATABLE_FIELDS = [
     "timezone",
     "language",
     "businessVisibility",
+    "deliveryDefaults",
 ] as const;
 
 /** PUT /api/hubs/me  (HUB_OWNER/HUB_ADMIN) */
@@ -181,15 +182,24 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
         // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
         // claves ya no borra las demás (antes el $set del objeto entero se
         // llevaba por delante deliveryWhatsapp, email, tiktok…).
-        const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig"]);
+        const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults"]);
         const patch: Record<string, unknown> = {};
         for (const field of UPDATABLE_FIELDS) {
             const value = req.body ? req.body[field] : undefined;
             if (value === undefined) continue;
             if (NESTED.has(field) && value && typeof value === "object" && !Array.isArray(value)) {
                 for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
-                    if (inner !== undefined) patch[`${field}.${key}`] = inner;
+                    if (inner === undefined) continue;
+                    // deliveryDefaults: solo string|null — un objeto/array aquí
+                    // sería CastError→500 y además viajaría crudo a business-service.
+                    if (field === "deliveryDefaults" && inner !== null && typeof inner !== "string") continue;
+                    patch[`${field}.${key}`] = inner;
                 }
+            } else if (field === "deliveryDefaults") {
+                // Solo se acepta como objeto: un `deliveryDefaults: null` crudo
+                // actualizaría el hub sin disparar la propagación (el hook
+                // detecta claves con punto) y dejaría los negocios desfasados.
+                continue;
             } else {
                 patch[field] = value;
             }
@@ -225,6 +235,27 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
             } catch (propagateError) {
                 console.error(
                     "No se pudo propagar el branding a los negocios del hub:",
+                    propagateError instanceof Error ? propagateError.message : propagateError
+                );
+            }
+        }
+
+        // Ubicación de entrega por defecto: si cambió, se re-sincroniza el
+        // prefill del checkout de TODOS sus negocios (mismo patrón best-effort
+        // que el branding: el update del hub ya quedó aunque esto falle).
+        const deliveryDefaultsTouched = Object.keys(patch).some((k) =>
+            k.startsWith("deliveryDefaults.")
+        );
+        if (deliveryDefaultsTouched && hub) {
+            try {
+                await propagateHubDeliveryDefaultsExternal(String(ctx.hubId), {
+                    state: hub.deliveryDefaults?.state ?? null,
+                    stateIso: hub.deliveryDefaults?.stateIso ?? null,
+                    city: hub.deliveryDefaults?.city ?? null,
+                });
+            } catch (propagateError) {
+                console.error(
+                    "No se pudo propagar la ubicación de entrega a los negocios del hub:",
                     propagateError instanceof Error ? propagateError.message : propagateError
                 );
             }

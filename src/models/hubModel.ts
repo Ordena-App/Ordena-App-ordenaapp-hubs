@@ -105,6 +105,19 @@ const hubSchema = new Schema({
     contact: { type: contactSchema, default: () => ({}) },
     domain: { type: domainSchema, default: () => ({}) },
 
+    // ---- Ubicación de entrega por defecto (prefill del checkout) ----
+    // Un hub suele operar en UNA sola ciudad (ej. Trujillo): estos valores se
+    // propagan a delivery_options.default_delivery_location de todos sus
+    // negocios HUB_MANAGED para que el checkout manual pre-rellene
+    // Departamento/Estado y Ciudad. Siempre editable por el cliente final.
+    deliveryDefaults: {
+        state: { type: String, default: null },
+        // ISO 3166-2 del estado (ej. "HN-CL"); match exacto en el checkout y
+        // en el matcher de zonas sin depender de acentos del nombre.
+        stateIso: { type: String, default: null },
+        city: { type: String, default: null },
+    },
+
     // Zona horaria del hub: cálculos de apertura, estadísticas y rotación de
     // métricas la respetan. Cada Business mantiene además su propio horario.
     timezone: { type: String, default: "America/El_Salvador" },
@@ -200,6 +213,12 @@ export interface IHub extends Document {
         verifiedDomain?: string;
         sslEnabled: boolean;
         status: "unconfigured" | "pending" | "verified" | "error";
+    };
+    /** Prefill de estado/ciudad para el checkout de sus negocios. */
+    deliveryDefaults?: {
+        state?: string | null;
+        stateIso?: string | null;
+        city?: string | null;
     };
     timezone: string;
     country: string;

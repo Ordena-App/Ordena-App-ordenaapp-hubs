@@ -120,6 +120,17 @@ export async function createBusinessForMyHub(req: Request, res: Response): Promi
                     },
                 }
                 : {}),
+            // Prefill del checkout: el negocio nace con la ubicación de entrega
+            // por defecto del hub (deliveryDefaults), si el hub la configuró.
+            ...(hub.deliveryDefaults?.state || hub.deliveryDefaults?.city
+                ? {
+                    default_delivery_location: {
+                        state: hub.deliveryDefaults.state ?? null,
+                        stateIso: hub.deliveryDefaults.stateIso ?? null,
+                        city: hub.deliveryDefaults.city ?? null,
+                    },
+                }
+                : {}),
         });
 
         await hubModel.updateOne(
