@@ -62,10 +62,14 @@ const PLANS = [
         billingCycle: "monthly",
         lookupKeys: ["hub_standard_monthly_v1"],
         limits: {
+            // Mismos límites que el Piloto (la diferencia entre planes es solo
+            // el precio de exhibición): 20 negocios / 1,800 pedidos, negocio
+            // extra barato a propósito y pedido extra a $0.10 que cubre el
+            // costo real de WhatsApp (~$0.06 en plantillas por pedido).
             businessesIncluded: 20,
-            ordersPerMonth: 2000,
-            extraBusinessPrice: 8,
-            extraOrderPrice: 0.08,
+            ordersPerMonth: 1800,
+            extraBusinessPrice: 5,
+            extraOrderPrice: 0.1,
             businessesHardCap: 100,
         },
         isPublic: true,

@@ -144,10 +144,13 @@ Es idempotente (upsert por `code`). Crea:
 | Precio exhibición | $149/mes | $199/mes |
 | lookupKeys | `hub_piloto_monthly_v1`, `hub_piloto_monthly_v2` | `hub_standard_monthly_v1` |
 | Negocios incluidos | 20 | 20 |
-| Pedidos/mes | 1,800 | 2,000 |
-| Negocio extra | $5 | $8 |
-| Pedido extra | $0.10 | $0.08 |
+| Pedidos/mes | 1,800 | 1,800 |
+| Negocio extra | $5 | $5 |
+| Pedido extra | $0.10 | $0.10 |
 | Visible en vitrina | **no** (isPublic:false) | sí |
+
+Ambos planes comparten límites a propósito — la única diferencia es el precio
+de exhibición ($149 preferente de Oe Ya vs $199 estándar).
 
 Los montos/límites se pueden editar en Mongo sin deploy, pero cambiar el
 catálogo NO re-aplica los snapshots de hubs ya suscritos (script
