@@ -153,8 +153,17 @@ Ambos planes comparten límites a propósito — la única diferencia es el prec
 de exhibición ($149 preferente de Oe Ya vs $199 estándar).
 
 Los montos/límites se pueden editar en Mongo sin deploy, pero cambiar el
-catálogo NO re-aplica los snapshots de hubs ya suscritos (script
-`reapplyHubPlans` pendiente).
+catálogo NO re-aplica los snapshots de hubs ya suscritos (la tarjeta "Uso del
+plan" lee `hub.subscription.limits`, no el catálogo). Tras cambiar planes:
+
+```bash
+npx ts-node src/scripts/reapplyHubPlans.ts
+```
+
+Re-aplica los límites del catálogo a todos los hubs suscritos. Solo toca
+`subscription.limits` (no pisa estado/periodo/lookupKey — seguro sobre la
+sub manual de Oe Ya). Es un cambio de datos: no hace falta redeploy ni
+restart, con recargar la página del plan basta.
 
 ---
 
