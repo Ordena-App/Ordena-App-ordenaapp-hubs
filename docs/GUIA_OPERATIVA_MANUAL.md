@@ -135,7 +135,7 @@ Es idempotente (upsert por `code`). Crea:
 | Negocios incluidos | 20 | 20 |
 | Pedidos/mes | 1,800 | 2,000 |
 | Negocio extra | $5 | $8 |
-| Pedido extra | $0.05 | $0.08 |
+| Pedido extra | $0.10 | $0.08 |
 | Visible en vitrina | **no** (isPublic:false) | sí |
 
 Los montos/límites se pueden editar en Mongo sin deploy, pero cambiar el

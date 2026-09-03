@@ -30,8 +30,11 @@ const PLANS = [
             // excedente en vez de regalarse dentro del incluido.
             businessesIncluded: 20,
             ordersPerMonth: 1800,
+            // Negocio extra barato a proposito (conviene que agregue negocios:
+            // escala el plan); el pedido extra a $0.10 cubre el costo real de
+            // WhatsApp (~$0.06 en plantillas por pedido) y deja margen.
             extraBusinessPrice: 5,
-            extraOrderPrice: 0.05,
+            extraOrderPrice: 0.1,
             businessesHardCap: 100,
         },
         isPublic: false,
