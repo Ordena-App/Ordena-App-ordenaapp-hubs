@@ -131,6 +131,16 @@ export async function createBusinessForMyHub(req: Request, res: Response): Promi
                     },
                 }
                 : {}),
+            // Métodos de entrega del hub: el checkout nace ofreciendo lo que el
+            // operador decidió (default: delivery + recogida, tarifa 0).
+            fulfillment: {
+                deliveryEnabled: hub.fulfillment?.deliveryEnabled !== false,
+                pickupEnabled: hub.fulfillment?.pickupEnabled !== false,
+                deliveryFee:
+                    typeof hub.fulfillment?.deliveryFee === "number" && hub.fulfillment.deliveryFee >= 0
+                        ? hub.fulfillment.deliveryFee
+                        : 0,
+            },
         });
 
         await hubModel.updateOne(

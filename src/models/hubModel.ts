@@ -118,6 +118,17 @@ const hubSchema = new Schema({
         city: { type: String, default: null },
     },
 
+    // ---- Métodos de entrega del checkout (fulfillment) ----
+    // El hub decide qué ofrecen TODOS sus negocios en el checkout: delivery
+    // propio (el operador reparte), recogida en local, y la tarifa plana del
+    // delivery. Se propaga a delivery_options de los negocios HUB_MANAGED
+    // (own_delivery / onSite / delivery), que no tienen dashboard propio.
+    fulfillment: {
+        deliveryEnabled: { type: Boolean, default: true },
+        pickupEnabled: { type: Boolean, default: true },
+        deliveryFee: { type: Number, default: 0 },
+    },
+
     // Zona horaria del hub: cálculos de apertura, estadísticas y rotación de
     // métricas la respetan. Cada Business mantiene además su propio horario.
     timezone: { type: String, default: "America/El_Salvador" },
@@ -219,6 +230,12 @@ export interface IHub extends Document {
         state?: string | null;
         stateIso?: string | null;
         city?: string | null;
+    };
+    /** Métodos de entrega del checkout de sus negocios + tarifa plana de delivery. */
+    fulfillment?: {
+        deliveryEnabled?: boolean;
+        pickupEnabled?: boolean;
+        deliveryFee?: number;
     };
     timezone: string;
     country: string;

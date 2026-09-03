@@ -41,6 +41,8 @@ export interface CreateHubBusinessPayload {
     branding?: { primaryColor?: string; primaryForeground?: string };
     /** deliveryDefaults del hub: el checkout del negocio nace con este prefill. */
     default_delivery_location?: { state?: string | null; stateIso?: string | null; city?: string | null };
+    /** fulfillment del hub: métodos de entrega y tarifa con los que nace el checkout. */
+    fulfillment?: { deliveryEnabled?: boolean; pickupEnabled?: boolean; deliveryFee?: number };
 }
 
 export async function createHubBusiness(payload: CreateHubBusinessPayload) {
@@ -165,6 +167,22 @@ export async function propagateHubDeliveryDefaultsExternal(
 ) {
     const { data } = await axios.patch(
         `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/delivery-defaults`,
+        body,
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
+/**
+ * Propaga los métodos de entrega del hub (fulfillment) al checkout de TODOS
+ * sus negocios: delivery_options.{own_delivery, onSite, delivery(tarifa)}.
+ */
+export async function propagateHubFulfillmentExternal(
+    hubId: string,
+    body: { deliveryEnabled: boolean; pickupEnabled: boolean; deliveryFee: number }
+) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/fulfillment`,
         body,
         { timeout: 20000, headers: internalHeaders() }
     );
