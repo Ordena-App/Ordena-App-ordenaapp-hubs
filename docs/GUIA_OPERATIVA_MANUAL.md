@@ -182,23 +182,36 @@ No hay endpoint nuevo ni secreto nuevo de webhook. El de Connect es otro y no
 participa.
 
 ### 5.3 Alta del trato de Oe Ya (7 días gratis → $149 × 6 → $199)
-1. El operador se registra y entra a `/hub-admin/plan` → elige plan → checkout
-   (necesita las envs `HUB_APP_*` del §2 en payments).
-2. ⚠️ **Hueco verificado:** el trial de 7 días está implementado en el backend
-   (`trial_period_days`) pero **el frontend hoy no lo envía** — el checkout
-   sale SIN trial. Dos opciones:
-   - (a) crear la suscripción manualmente desde el Dashboard de Stripe con el
-     price `hub_piloto_monthly_v1`, trial de 7 días y
-     **`metadata.hubId = <id del hub>`** (el webhook la reconoce igual), o
-   - (b) pedir el fix de una línea para que el flujo del Piloto mande
-     `trialDays: 7`.
-3. Con la suscripción viva, en el Dashboard: abrir la suscripción → **convert
-   to subscription schedule** → dos fases:
-   - Fase 1: price `hub_piloto_monthly_v1` ($149) · **6 iteraciones**
-   - Fase 2: price `hub_piloto_monthly_v2` ($199) · indefinida
-   Stripe hace la transición sola en el mes 7; como ambos lookup keys apuntan
-   al MISMO plan (`HUB_PILOTO`), los límites no cambian y no hay código que
-   tocar.
+
+El plan Piloto NO está en la vitrina (`isPublic:false` a propósito) y el
+checkout de la UI hoy no envía trial, así que el trato se da de alta como
+**suscripción manual** desde el Dashboard de Stripe (Live). La cascada del
+webhook resuelve el hub por `subscription.metadata.hubId` primero (fallback:
+`customer.metadata.hubId`) — verificado en código.
+
+1. **hubId de Oe Ya** (24 hex): abre
+   `https://api2.ordena.app/api/hubs/resolve?slug=oe-ya` y copia
+   `data.hub._id` (o en Mongo: `db.hubs.findOne({slug:'oe-ya'})._id`).
+2. **Customers → + Add customer** con el email del operador. Agrega metadata
+   `hubId = <ese id>` al customer (fallback de la cascada).
+3. **Subscriptions → + Create subscription**:
+   - Price: `hub_piloto_monthly_v1` ($149)
+   - **Free trial: 7 días**
+   - **Metadata de la SUSCRIPCIÓN: `hubId = <ese id>`** ← lo crítico
+4. **Tarjeta**: la sub nace en trial sin método de pago. Durante los 7 días el
+   operador entra a `/hub-admin/plan` → **"Gestionar facturación"** (Billing
+   Portal de Stripe) y agrega su tarjeta — el día 8 Stripe cobra solo. Plan B
+   si el portal no abriera: compartirle el link del portal desde el Dashboard.
+5. Abrir la suscripción → **⋯ → Convert to subscription schedule** → dos fases:
+   - Fase 1: `hub_piloto_monthly_v1` ($149) · **6 iteraciones**
+   - Fase 2: `hub_piloto_monthly_v2` ($199) · indefinida
+   Stripe transiciona sola en el mes 7; como ambos lookup keys apuntan al
+   MISMO plan (`HUB_PILOTO`), los límites no cambian y no hay código que tocar.
+6. Verificación: en cuanto el webhook procese `customer.subscription.created/
+   updated`, `/hub-admin/plan` de Oe Ya muestra 25 negocios / 2,500 pedidos.
+
+*(Alternativa si se prefiere que pague desde la UI: fix de `trialDays` en el
+checkout + `isPublic:true` temporal — pendiente en §9.)*
 
 ### 5.4 Excedentes (no requiere acción)
 Al llegar `invoice.upcoming`, payments cierra el ledger del período en hubs y
@@ -373,7 +386,35 @@ En orden — cada punto valida una pieza de la configuración:
 
 ---
 
-## 9. Decisiones abiertas (para cerrar cuando quieras)
+## 9. Checklist exprés del pase a PROD
+
+Todo lo de la guía aplica por entorno; esto es lo que CAMBIA al pasar de
+staging a producción (en orden):
+
+1. ☐ Mergear los PR de `feature/new-mode-ordena-hub` → `main` en los 9 repos
+   (§3; `git fetch` antes en business y orders) y desplegar en el orden del §3.
+2. ☐ `INTERNAL_HUBS_SECRET` NUEVO (distinto al de staging) en los 6 servicios
+   de prod + resto de envs del §2 con los hosts de prod (`HUB_APP_*` con
+   `https://ordena.app/...`).
+3. ☐ `JWT_SECRET` propio en hubs de prod (crítico).
+4. ☐ Seed de `hub_plans` contra la DB de prod (§4).
+5. ☐ Stripe **Live**: recrear los 3 prices con sus lookup keys (los de test NO
+   se copian solos) + los 6 eventos en el webhook de prod (§5.2).
+6. ☐ Meta: nada — las plantillas son de la WABA, sirven para todos los
+   entornos (registrarlas una vez, §6).
+7. ☐ Vercel: añadir `*.ordena.app` al proyecto de PROD + wildcard DNS
+   (`*` → CNAME `cname.vercel-dns.com`). Los subdominios existentes
+   (api2, market, staging…) no se ven afectados: sus registros explícitos
+   ganan al wildcard, y el middleware además los excluye por lista.
+8. ☐ `VERCEL_ACCESS_TOKEN` + `VERCEL_PROJECT_ID` (del proyecto de PROD) en
+   business de prod (§7.2).
+9. ☐ Repetir el smoke test del §8 sobre prod con un hub de prueba (y borrarlo
+   o dejarlo como demo).
+10. ☐ Alta de Oe Ya con la sub manual del §5.3.
+
+---
+
+## 10. Decisiones abiertas (para cerrar cuando quieras)
 
 1. **Trial de 7 días del checkout** — el backend lo soporta; falta que el
    frontend lo mande (`trialDays: 7`) o crear la suscripción de Oe Ya a mano.
