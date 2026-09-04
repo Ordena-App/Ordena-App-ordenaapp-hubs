@@ -23,6 +23,7 @@ exports.uploadBusinessLogoExternal = uploadBusinessLogoExternal;
 exports.propagateHubStorefrontThemeExternal = propagateHubStorefrontThemeExternal;
 exports.propagateHubDeliveryDefaultsExternal = propagateHubDeliveryDefaultsExternal;
 exports.propagateHubFulfillmentExternal = propagateHubFulfillmentExternal;
+exports.propagateHubRegionCountryExternal = propagateHubRegionCountryExternal;
 exports.addHubDomainExternal = addHubDomainExternal;
 exports.hubDomainStatusExternal = hubDomainStatusExternal;
 const axios_1 = __importDefault(require("axios"));
@@ -148,6 +149,16 @@ function propagateHubDeliveryDefaultsExternal(hubId, body) {
 function propagateHubFulfillmentExternal(hubId, body) {
     return __awaiter(this, void 0, void 0, function* () {
         const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/fulfillment`, body, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+/**
+ * Propaga el país del hub a region_settings.country de TODOS sus negocios
+ * (el checkout resuelve el país del negocio por region_settings).
+ */
+function propagateHubRegionCountryExternal(hubId, country) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/region-country`, { country }, { timeout: 20000, headers: internalHeaders() });
         return data;
     });
 }
