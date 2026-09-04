@@ -10,7 +10,18 @@ export const BUSINESS_SERVICE_LINK = process.env.BUSINESS_SERVICE_LINK || 'http:
 export const ORDERS_SERVICE_LINK = process.env.ORDERS_SERVICE_LINK || 'http://localhost:3005/api';
 export const PRODUCTS_SERVICE_LINK = process.env.PRODUCTS_SERVICE_LINK || 'http://localhost:3004/api';
 export const PAYMENTS_SERVICE_LINK = process.env.PAYMENTS_SERVICE_LINK || 'http://localhost:3006/api';
+export const REPORTS_SERVICE_LINK = process.env.REPORTS_SERVICE_LINK || 'http://localhost:3010/api';
 
-// Secreto compartido para llamadas server-to-server (mismo patrón que
-// whatsapp-bot / shipping: el receptor valida el header x-ordena-secret).
-export const INTERNAL_SHARED_SECRET = process.env.INTERNAL_SHARED_SECRET || '';
+// Secreto compartido para llamadas server-to-server (header x-ordena-secret).
+// Se acepta INTERNAL_HUBS_SECRET (nombre canónico, igual que en los receptores
+// business/orders/products) y también INTERNAL_SHARED_SECRET por compatibilidad
+// con despliegues previos. El valor DEBE coincidir en los 4 servicios.
+export const INTERNAL_SHARED_SECRET =
+    process.env.INTERNAL_HUBS_SECRET || process.env.INTERNAL_SHARED_SECRET || '';
+
+if (!INTERNAL_SHARED_SECRET) {
+    console.warn(
+        '[hubs] INTERNAL_HUBS_SECRET no configurado: las llamadas internas a ' +
+        'business/orders/products serán rechazadas por los receptores (fail-closed).'
+    );
+}

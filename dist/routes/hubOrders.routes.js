@@ -11,6 +11,8 @@ router.get("/me/dashboard", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB
 // Portal Business: resumen de UN negocio (viewer: el suyo; roles hub: ?businessId)
 router.get("/me/portal/summary", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"), hubOrders_controller_1.getMyBusinessPortalSummary);
 router.get("/me/orders", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"), hubOrders_controller_1.getMyHubOrders);
+// Aviso al repartidor del hub (solo roles de hub: el delivery lo coordina el operador)
+router.post("/me/orders/:orderId/notify-delivery", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubOrders_controller_1.notifyDeliveryForMyHubOrder);
 router.patch("/me/orders/:orderId/status", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"), hubOrders_controller_1.updateMyHubOrderStatus);
 // ── Métodos de pago centralizados del hub (solo administración) ──
 router.get("/me/payment-accounts/:method", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubPayments_controller_1.getMyHubPaymentAccounts);

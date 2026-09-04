@@ -39,6 +39,10 @@ export interface CreateHubBusinessPayload {
     region_settings: { country: string; currency: string; language?: "ES" | "EN" };
     /** Branding del hub: el storefront del negocio nace con estos colores. */
     branding?: { primaryColor?: string; primaryForeground?: string };
+    /** deliveryDefaults del hub: el checkout del negocio nace con este prefill. */
+    default_delivery_location?: { state?: string | null; stateIso?: string | null; city?: string | null };
+    /** fulfillment del hub: métodos de entrega y tarifa con los que nace el checkout. */
+    fulfillment?: { deliveryEnabled?: boolean; pickupEnabled?: boolean; deliveryFee?: number };
 }
 
 export async function createHubBusiness(payload: CreateHubBusinessPayload) {
@@ -131,5 +135,88 @@ export async function uploadBusinessLogoExternal(
         fd,
         { timeout: 30000, headers: internalHeaders({ "x-business-id": businessId }) }
     );
+    return data;
+}
+
+
+/**
+ * Propaga el branding del hub al tema del storefront de TODOS sus negocios
+ * (storefrontButtonTheme.global). Complemento de la siembra al crear: cubre
+ * negocios anteriores a la siembra y cambios de color posteriores del hub.
+ */
+export async function propagateHubStorefrontThemeExternal(
+    hubId: string,
+    body: { primaryColor: string; primaryForeground?: string }
+) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/storefront-theme`,
+        body,
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
+/**
+ * Propaga la ubicación de entrega por defecto del hub (deliveryDefaults) a
+ * delivery_options.default_delivery_location de TODOS sus negocios. Con body
+ * vacío limpia el prefill. Complemento de la siembra al crear.
+ */
+export async function propagateHubDeliveryDefaultsExternal(
+    hubId: string,
+    body: { state?: string | null; stateIso?: string | null; city?: string | null }
+) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/delivery-defaults`,
+        body,
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
+/**
+ * Propaga los métodos de entrega del hub (fulfillment) al checkout de TODOS
+ * sus negocios: delivery_options.{own_delivery, onSite, delivery(tarifa)}.
+ */
+export async function propagateHubFulfillmentExternal(
+    hubId: string,
+    body: { deliveryEnabled: boolean; pickupEnabled: boolean; deliveryFee: number }
+) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/fulfillment`,
+        body,
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
+/**
+ * Propaga el país del hub a region_settings.country de TODOS sus negocios
+ * (el checkout resuelve el país del negocio por region_settings).
+ */
+export async function propagateHubRegionCountryExternal(hubId: string, country: string) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/region-country`,
+        { country },
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
+// ── Dominio custom del hub (F4): proxies de Vercel via business ──
+export async function addHubDomainExternal(domain: string) {
+    const { data } = await axios.post(
+        `${BUSINESS_SERVICE_LINK}/internal/hub-domains`,
+        { domain },
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
+export async function hubDomainStatusExternal(domain: string) {
+    const { data } = await axios.get(`${BUSINESS_SERVICE_LINK}/internal/hub-domains/status`, {
+        timeout: 20000,
+        headers: internalHeaders(),
+        params: { domain },
+    });
     return data;
 }

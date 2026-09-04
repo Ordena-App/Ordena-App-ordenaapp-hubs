@@ -142,7 +142,14 @@ export async function loginHubUser(req: Request, res: Response): Promise<Respons
             });
         }
 
-        const hub = await hubModel.findById(user.hub_id);
+        // El Portal Business solo necesita identidad y branding: sin proyección,
+        // el snapshot del login le entregaba suscripción, límites, métricas y el
+        // WhatsApp del repartidor, y encima se cachea en su localStorage.
+        const hubQuery = hubModel.findById(user.hub_id);
+        const hub =
+            user.role === "BUSINESS_VIEWER"
+                ? await hubQuery.select("name slug logo favicon branding timezone country currency language status")
+                : await hubQuery;
         if (!hub || hub.status !== "ACTIVE") {
             return res.status(403).json({
                 status: false,
@@ -193,6 +200,19 @@ export async function createHubUser(req: Request, res: Response): Promise<Respon
     try {
         const ctx = req.hubContext!;
         const { email, password, name, role, businessId } = req.body || {};
+
+        const hubForLock: any = await hubModel.findById(ctx.hubId).select("subscription.pastDueSince").lean();
+        // Mora >= 15 días: se bloquea SOLO crear (negocios/usuarios) — la
+        // operación pública y todo lo demás siguen intactos (decisión F3 v2).
+        const pastDueSince = hubForLock?.subscription?.pastDueSince;
+        if (pastDueSince && Date.now() - new Date(pastDueSince).getTime() > 15 * 24 * 60 * 60 * 1000) {
+            return res.status(403).json({
+                status: false,
+                statusCode: 403,
+                message: "Tu suscripción lleva más de 15 días con un pago pendiente. Actualiza tu método de pago en Plan para seguir creando.",
+                data: { reason: "past_due_lock" },
+            });
+        }
 
         const allowedRoles: HubUserRole[] = ["HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"];
         if (!email || !password || !role || !allowedRoles.includes(role)) {

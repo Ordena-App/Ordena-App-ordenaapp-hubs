@@ -9,6 +9,11 @@ const brandingSchema = new Schema(
         gradientFrom: { type: String },
         gradientTo: { type: String },
         bannerUrl: { type: String },
+        // Toggle del banner en el hero del storefront (ausente = mostrar)
+        bannerEnabled: { type: Boolean },
+        // Negocios por fila en el storefront movil: 1 (tarjeta ancha, default)
+        // o 2 (mitad y mitad). En pantallas grandes la grilla no cambia.
+        businessesMobileColumns: { type: Number },
     },
     { _id: false }
 );
@@ -20,6 +25,10 @@ const contactSchema = new Schema(
         // Número que recibe la notificación general de cada pedido del hub
         // (adicional a la notificación que recibe el negocio correspondiente).
         whatsapp: { type: String },
+        // Repartidor del hub (F3): el operador hace el delivery de TODOS sus
+        // negocios, así que el número vive aquí y no se repite por negocio.
+        // Recibe el aviso al pulsar "Notificar a repartidor" en un pedido.
+        deliveryWhatsapp: { type: String },
         website: { type: String },
         instagram: { type: String },
         facebook: { type: String },
@@ -64,6 +73,10 @@ const subscriptionSchema = new Schema(
             end: { type: Date },
         },
         billingCycle: { type: String, enum: ["monthly", "yearly"], default: "monthly" },
+        // Desde cuándo está en mora (lo escribe el PATCH interno de billing).
+        // A los 15 días de mora se bloquea crear negocios/usuarios — NUNCA la
+        // operación pública (decisión F3 v2). null = al día.
+        pastDueSince: { type: Date, default: null },
         // Límites comerciales del plan. Defaults PERMISIVOS (-1 = ilimitado),
         // misma convención de red de seguridad que planFeatures en business.
         limits: {
@@ -71,6 +84,9 @@ const subscriptionSchema = new Schema(
             ordersPerMonth: { type: Number, default: -1 },
             extraBusinessPrice: { type: Number, default: 0 },
             extraOrderPrice: { type: Number, default: 0 },
+            // Freno de emergencia (F3 v2): sobre businessesIncluded se factura
+            // como extra sin bloquear; sobre el hard cap si se bloquea. -1 = sin freno.
+            businessesHardCap: { type: Number, default: -1 },
         },
     },
     { _id: false }
@@ -88,6 +104,30 @@ const hubSchema = new Schema({
     branding: { type: brandingSchema, default: () => ({}) },
     contact: { type: contactSchema, default: () => ({}) },
     domain: { type: domainSchema, default: () => ({}) },
+
+    // ---- Ubicación de entrega por defecto (prefill del checkout) ----
+    // Un hub suele operar en UNA sola ciudad (ej. Trujillo): estos valores se
+    // propagan a delivery_options.default_delivery_location de todos sus
+    // negocios HUB_MANAGED para que el checkout manual pre-rellene
+    // Departamento/Estado y Ciudad. Siempre editable por el cliente final.
+    deliveryDefaults: {
+        state: { type: String, default: null },
+        // ISO 3166-2 del estado (ej. "HN-CL"); match exacto en el checkout y
+        // en el matcher de zonas sin depender de acentos del nombre.
+        stateIso: { type: String, default: null },
+        city: { type: String, default: null },
+    },
+
+    // ---- Métodos de entrega del checkout (fulfillment) ----
+    // El hub decide qué ofrecen TODOS sus negocios en el checkout: delivery
+    // propio (el operador reparte), recogida en local, y la tarifa plana del
+    // delivery. Se propaga a delivery_options de los negocios HUB_MANAGED
+    // (own_delivery / onSite / delivery), que no tienen dashboard propio.
+    fulfillment: {
+        deliveryEnabled: { type: Boolean, default: true },
+        pickupEnabled: { type: Boolean, default: true },
+        deliveryFee: { type: Number, default: 0 },
+    },
 
     // Zona horaria del hub: cálculos de apertura, estadísticas y rotación de
     // métricas la respetan. Cada Business mantiene además su propio horario.
@@ -112,6 +152,30 @@ const hubSchema = new Schema({
         ordersPreviousMonth: { type: Number, default: 0 },
         extraOrdersCurrentMonth: { type: Number, default: 0 },
         lastRotatedAt: { type: Date },
+        // Reclamo atómico del aviso del 80% (una vez por mes): YYYY-MM ya avisado.
+        nudge80MonthKey: { type: String, default: null },
+    },
+
+    // ---- Liquidaciones (F4): comision del hub hacia sus negocios ----
+    // Default del hub + overrides POR NEGOCIO (a unos les cobra mas y a otros
+    // menos — decision de producto). percent = % sobre ventas brutas;
+    // fixed = monto fijo por pedido; none = sin comision.
+    settlementConfig: {
+        commissionType: { type: String, enum: ["percent", "fixed", "none"], default: "percent" },
+        commissionValue: { type: Number, default: 0 },
+    },
+    commissionOverrides: {
+        type: [
+            new Schema(
+                {
+                    businessId: { type: String, required: true },
+                    commissionType: { type: String, enum: ["percent", "fixed", "none"], default: "percent" },
+                    commissionValue: { type: Number, default: 0 },
+                },
+                { _id: false }
+            ),
+        ],
+        default: [],
     },
 
     // ---- Visibilidad hacia los Businesses (F4: configurable por hub) ----
@@ -142,11 +206,14 @@ export interface IHub extends Document {
         gradientFrom?: string;
         gradientTo?: string;
         bannerUrl?: string;
+        bannerEnabled?: boolean;
+        businessesMobileColumns?: number;
     };
     contact: {
         email?: string;
         phone?: string;
         whatsapp?: string;
+        deliveryWhatsapp?: string;
         website?: string;
         instagram?: string;
         facebook?: string;
@@ -157,6 +224,18 @@ export interface IHub extends Document {
         verifiedDomain?: string;
         sslEnabled: boolean;
         status: "unconfigured" | "pending" | "verified" | "error";
+    };
+    /** Prefill de estado/ciudad para el checkout de sus negocios. */
+    deliveryDefaults?: {
+        state?: string | null;
+        stateIso?: string | null;
+        city?: string | null;
+    };
+    /** Métodos de entrega del checkout de sus negocios + tarifa plana de delivery. */
+    fulfillment?: {
+        deliveryEnabled?: boolean;
+        pickupEnabled?: boolean;
+        deliveryFee?: number;
     };
     timezone: string;
     country: string;

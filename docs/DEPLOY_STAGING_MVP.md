@@ -1,7 +1,8 @@
-# Guía de despliegue a Staging — MVP Modo Multi-Negocio (F1 + F2)
+# Guía de despliegue a Staging — MVP Modo Multi-Negocio (F1 + F2 + F3 v1)
 
 **Fecha:** 23 de agosto de 2026
-**Alcance:** todo lo commiteado en `feature/new-mode-ordena-hub` en 7 repos (frontend + hubs + business + orders + products + payments + gateway).
+**Alcance:** todo lo commiteado en `feature/new-mode-ordena-hub` en 8 repos (frontend + hubs + business + orders + products + payments + gateway + whatsapp-bot).
+**Actualizado:** 26 de agosto de 2026 — se sumó **F3 v1** (aviso al repartidor, aviso al hub y privacidad configurable). Lo comercial de Stripe queda para F3 v2.
 
 ---
 
@@ -23,6 +24,22 @@ Corregido durante la revisión (ya commiteado):
 ### ✅ Gap de productos: CERRADO (F2.1)
 
 El dashboard hub ahora tiene la sección **Productos**: selector de negocio, crear producto con hasta 4 fotos (proxy multipart hubs→products, sube al bucket de Firebase), editar precio/stock/descripción, activar/desactivar, eliminar y **asignar categorías globales** por producto. Endpoints: `GET/POST /api/hubs/me/businesses/:businessId/products`, `PATCH/DELETE .../:productId`, `PATCH /api/hubs/me/products/:productId/hub-categories` — todos con validación de pertenencia hub→negocio y límites de plan del upstream intactos.
+
+### 🔐 Auditoría de seguridad (segunda pasada, multi-agente adversarial)
+
+Se auditó todo el código del hub con 5 revisores + verificación adversarial: **18 hallazgos confirmados**, todos corregidos. Los críticos:
+
+| # | Problema | Corregido en |
+|---|---|---|
+| 1 | `updateProduct` no filtraba por negocio → **cualquiera podía editar productos de cualquier tienda** de la plataforma (precio, stock, visibilidad) | products |
+| 2 | `patchBusinessInternal` **sin autenticación alguna** → reescribir nombre/teléfono/dirección de cualquier negocio | business |
+| 3 | Secreto interno **fail-open**: sin la env, todos los endpoints internos quedaban abiertos (incluido el listado de pedidos con PII de clientes) | hubs, business, orders, products |
+| 4 | `hub_id` aceptado del cliente sin verificar → inyectar pedidos en el panel de un hub ajeno | orders |
+| 5 | `hubPaymentsKey` de header/cookie sin verificar → mostrar las cuentas bancarias de un hub en una tienda ajena | frontend |
+| 6 | Pagos del hub se perdían en el paso 2 de `/pagar` (los 14 detalles no eran hub-aware) | frontend |
+| 7 | Passthrough `--` servía tiendas de OTRO hub bajo el host de un hub | frontend (middleware) |
+
+Además: uploads restringidos a imágenes con límites y errores 400 claros; `/hub-logo` solo toca negocios `HUB_MANAGED` y valida el secreto **antes** de consumir el archivo; el `BUSINESS_VIEWER` ya no recibe la suscripción/límites/métricas del hub; subdominios de infraestructura (`cname`, `dns`, `mx`…) nunca se tratan como hub; `*.localhost` deja de ser origen confiable en producción; y dos bugs de horarios (el editor pisaba el horario real con el default, y el layout perdía el horario al ir al checkout).
 
 Otros menores conocidos (no bloquean): creación concurrente del mismo negocio puede dar 500 por índice único (reintentar funciona); el botón "Ver tienda" del dashboard arma la URL `*.ordena.app` (en staging apunta a prod — cosmético); el toggle `allowSalesOutsideHours` da 500 si el negocio jamás abrió sus settings (se auto-crean al primer GET — escenario raro).
 
@@ -73,14 +90,16 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 | `BUSINESS_SERVICE_LINK` | `http://<business-staging>:3002/api` | Con `/api` al final |
 | `ORDERS_SERVICE_LINK` | `http://<orders-staging>:3005/api` | |
 | `PAYMENTS_SERVICE_LINK` | `http://<payments-staging>:3006/api` | |
-| `PRODUCTS_SERVICE_LINK` | `http://<products-staging>:3004/api` | Reservado (tagging de categorías) |
-| `INTERNAL_SHARED_SECRET` | `SECRETO_INTERNO` | Manda `x-ordena-secret` a business/orders/products Y valida el que le manda orders |
+| `REPORTS_SERVICE_LINK` | `http://<reportes-staging>:3010/api` | Informes del hub (F3 v2 bloque C) |
+| `PRODUCTS_SERVICE_LINK` | `http://<products-staging>:3004/api` | **Obligatoria** — CRUD de productos del hub + tagging de categorías |
+| `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` | **Obligatorio.** Manda `x-ordena-secret` a business/orders/products Y valida el que le manda orders. (También se acepta `INTERNAL_SHARED_SECRET` por compat.) |
 
 ### ordenaapp-api-gateway
 
 | Env | Valor staging |
 |---|---|
 | `HUBS_SERVICE_URL` | `http://<hubs-staging>:3013/api` |
+| `NODE_ENV` | `production` — sin esto, el gateway trata `*.localhost` como origen confiable |
 
 ### ordenaapp-orders
 
@@ -88,6 +107,15 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 |---|---|
 | `HUBS_SERVICE_LINK` | `http://<hubs-staging>:3013/api` |
 | `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` |
+| `TEMPLATE_DELIVERY_ES` | `pedido_repartidor_es` *(F3 v1 — opcional, es el default)* |
+| `TEMPLATE_HUB_ORDER_ES` | `pedido_hub_es` *(F3 v1 — opcional, es el default)* |
+| `TEMPLATE_BUSINESS_HUB_ES` | `pedido_negocio_hub_es` *(F3 v1 — opcional, es el default)* |
+
+> Las tres `TEMPLATE_*` solo hacen falta si en Meta les pusiste OTRO nombre. El
+> código trae esos defaults. Lo que SÍ es obligatorio: que las plantillas
+> existan **aprobadas** en Meta como categoría **Utility** antes de probar
+> (ver `ordenaapp-whatsapp-bot/PLANTILLAS_REPARTIDOR_Y_HUB.md`); si no, Meta
+> rechaza el envío y el bot loguea el error sin romper el pedido.
 
 ### ordenaapp-business
 
@@ -101,11 +129,30 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 |---|---|
 | `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` |
 
-### ordenaapp-payments y ordenaapp-frontend
+### ordenaapp-payments
+
+| Env | Valor staging |
+|---|---|
+| `HUBS_SERVICE_LINK` | `http://<hubs-staging>:3013/api` *(F3 v2)* |
+| `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` *(F3 v2 — mismo valor que los demás)* |
+| `HUB_APP_SUCCESS_URL` | `https://staging.ordena.app/hub-admin/plan?checkout=success` *(F3 v2)* |
+| `HUB_APP_CANCEL_URL` | `https://staging.ordena.app/hub-admin/plan?checkout=cancel` *(F3 v2)* |
+
+> F3 v2 además requiere: correr `npx ts-node src/scripts/seedHubPlans.ts` en hubs (una vez por entorno) y crear los prices en Stripe con lookup keys `hub_*` — checklist completo en `F3V2_BILLING.md`.
+
+### ordenaapp-reportes
+
+| Env | Valor staging |
+|---|---|
+| `INTERNAL_HUBS_SECRET` | `SECRETO_INTERNO` *(F3 v2 bloque C — mismo valor que los demás)* |
+
+### ordenaapp-frontend
 
 **Sin envs nuevas.** (Frontend usa `GENERAL_API_URL` existente; payments solo ganó el fallback `isHubKey` que lee la shared DB.)
 
-> Compat de despliegue: si algún `INTERNAL_*` falta, los endpoints internos **aceptan sin header** (mismo patrón que `WHATSAPP_SHARED_SECRET`). Staging funciona sin ellos, pero configúralos desde el día 1 — son la barrera de los endpoints `/internal/*`.
+> ⚠️ **El secreto interno es OBLIGATORIO** (cambió tras la auditoría de seguridad): los endpoints internos son ahora **fail-closed** — sin la env configurada devuelven 403 y el Modo Multi-Negocio no funciona (crear negocios, pedidos del hub, productos, logos). Antes aceptaban sin header, lo que los dejaba abiertos a internet a través del gateway.
+>
+> El servicio hubs acepta `INTERNAL_HUBS_SECRET` (nombre canónico) o `INTERNAL_SHARED_SECRET` (compat). **Lo más simple: usa `INTERNAL_HUBS_SECRET` con el mismo valor en los 4 servicios** (hubs, business, orders, products).
 
 ---
 
@@ -144,10 +191,19 @@ Todo es **aditivo y retrocompatible**: puede desplegarse en cualquier orden sin 
 11. **Contadores**: tras 1-2 pedidos, el dashboard del hub muestra pedidos/ventas y `hubs.usageMetrics.ordersCurrentMonth` incrementó en Mongo.
 12. **Aislamiento negativo**: con el token del viewer, llamar `GET /api/hubs/me/orders?businessId=<negocio ajeno>` → 403.
 
+### F3 v1 — avisos y privacidad
+
+13. **Número del repartidor**: en *Ajustes* del hub-admin, poner el WhatsApp del repartidor (con código de país). En un negocio SaaS/WL normal, el mismo campo vive en *Ajustes → General → Delivery propio* (ahí es por negocio, no por hub).
+14. **Aviso al repartidor**: abrir un pedido en *Pedidos* del hub → "Notificar a repartidor". ✅ llega el WhatsApp con el pedido completo y la línea de cobro (`COBRAR X` si es contra entrega, `Ya pagado` si no). El botón queda deshabilitado como "Repartidor ya notificado".
+15. **Envío único**: recargar y volver a intentar desde otra pestaña → el backend responde 409 y la UI se sincroniza sin mandar un segundo mensaje (el costo por mensaje es la razón del candado). En Mongo, `orders.delivery_notified_at` quedó sellado.
+16. **Aviso al hub**: hacer un pedido nuevo en el storefront del hub → llega el WhatsApp al número del hub (`pedido_hub_es`, dice de qué negocio es).
+    > ⚠️ El aviso al **negocio** (`pedido_negocio_hub_es`) está detrás de un `if (STAGE === 'production')` **preexistente** en orders — aplica a todos los pedidos, no solo a los del hub. En staging no va a llegar salvo que pongas `STAGE=production` en el orders de staging (ojo: eso también activa el resto de avisos productivos). El de repartidor y el del hub SÍ salen en staging.
+17. **Privacidad**: en *Ajustes* del hub, apagar "teléfono del cliente" y "dirección" → hacer otro pedido. ✅ el WhatsApp del negocio muestra esos campos como `—`, y en el Portal Business el pedido llega **sin** esos datos (verificar en la respuesta de red, no solo en pantalla: el filtro es server-side).
+
 ---
 
 ## 7. Pendientes después de staging (recordatorio)
 
-- **F3**: planes `hub_*` en Stripe + webhook → ms hubs, límites activos, reportes hub en ms-reportes.
-- **WhatsApp al hub**: crear plantilla Meta y conectar la notificación por pedido.
+- **F3 v2 (comercial)**: planes `hub_*` en Stripe + webhook → ms hubs, límites del plan como fuente de verdad, cobro por excedente sin bloquear, reportes de hub en ms-reportes.
+- **Plantillas en Meta**: las tres de F3 v1 tienen que estar aprobadas como **Utility** antes del smoke test 14-17.
 - **F4**: dominio custom del hub, visibilidad configurable, conectar negocios Ordena existentes, estado de cuenta/liquidaciones.

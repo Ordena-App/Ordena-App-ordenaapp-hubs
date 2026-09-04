@@ -48,3 +48,28 @@ export async function updateHubOrderStatus(
     );
     return data;
 }
+
+/**
+ * Aviso al repartidor del hub. orders resuelve el número (del hub para pedidos
+ * de hub) y marca el envío único; aquí solo se proxea con el businessId del
+ * pedido, que es lo que su middleware exige.
+ */
+export async function notifyDeliveryPersonExternal(businessId: string, orderId: string) {
+    const { data } = await axios.post(
+        `${ORDERS_SERVICE_LINK}/admin/orders/${orderId}/notify-delivery`,
+        {},
+        { timeout: 15000, headers: { ...headers(), "x-business-id": businessId } }
+    );
+    return data;
+}
+
+
+/** Lineas de liquidacion (F4): pedidos entregados+pagados del periodo, sin PII. */
+export async function getHubSettlementLines(hubId: string, businessId: string, from: string, to: string) {
+    const { data } = await axios.get(`${ORDERS_SERVICE_LINK}/internal/hub/${hubId}/settlement-lines`, {
+        timeout: 30000,
+        headers: headers(),
+        params: { businessId, from, to },
+    });
+    return data;
+}

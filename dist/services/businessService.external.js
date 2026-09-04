@@ -20,6 +20,12 @@ exports.patchBusinessInternal = patchBusinessInternal;
 exports.getBusinessSettingsExternal = getBusinessSettingsExternal;
 exports.patchBusinessWeeklyHours = patchBusinessWeeklyHours;
 exports.uploadBusinessLogoExternal = uploadBusinessLogoExternal;
+exports.propagateHubStorefrontThemeExternal = propagateHubStorefrontThemeExternal;
+exports.propagateHubDeliveryDefaultsExternal = propagateHubDeliveryDefaultsExternal;
+exports.propagateHubFulfillmentExternal = propagateHubFulfillmentExternal;
+exports.propagateHubRegionCountryExternal = propagateHubRegionCountryExternal;
+exports.addHubDomainExternal = addHubDomainExternal;
+exports.hubDomainStatusExternal = hubDomainStatusExternal;
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("../config/config");
 // ============================================================================
@@ -111,6 +117,65 @@ function uploadBusinessLogoExternal(businessId, file) {
         const fd = new FormDataCtor();
         fd.append("image", new Blob([file.buffer], { type: file.mimetype }), file.originalname);
         const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/business/${businessId}/hub-logo`, fd, { timeout: 30000, headers: internalHeaders({ "x-business-id": businessId }) });
+        return data;
+    });
+}
+/**
+ * Propaga el branding del hub al tema del storefront de TODOS sus negocios
+ * (storefrontButtonTheme.global). Complemento de la siembra al crear: cubre
+ * negocios anteriores a la siembra y cambios de color posteriores del hub.
+ */
+function propagateHubStorefrontThemeExternal(hubId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/storefront-theme`, body, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+/**
+ * Propaga la ubicación de entrega por defecto del hub (deliveryDefaults) a
+ * delivery_options.default_delivery_location de TODOS sus negocios. Con body
+ * vacío limpia el prefill. Complemento de la siembra al crear.
+ */
+function propagateHubDeliveryDefaultsExternal(hubId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/delivery-defaults`, body, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+/**
+ * Propaga los métodos de entrega del hub (fulfillment) al checkout de TODOS
+ * sus negocios: delivery_options.{own_delivery, onSite, delivery(tarifa)}.
+ */
+function propagateHubFulfillmentExternal(hubId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/fulfillment`, body, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+/**
+ * Propaga el país del hub a region_settings.country de TODOS sus negocios
+ * (el checkout resuelve el país del negocio por region_settings).
+ */
+function propagateHubRegionCountryExternal(hubId, country) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/region-country`, { country }, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+// ── Dominio custom del hub (F4): proxies de Vercel via business ──
+function addHubDomainExternal(domain) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.post(`${config_1.BUSINESS_SERVICE_LINK}/internal/hub-domains`, { domain }, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+function hubDomainStatusExternal(domain) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.BUSINESS_SERVICE_LINK}/internal/hub-domains/status`, {
+            timeout: 20000,
+            headers: internalHeaders(),
+            params: { domain },
+        });
         return data;
     });
 }
