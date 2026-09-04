@@ -188,6 +188,9 @@ const UPDATABLE_FIELDS = [
     "businessVisibility",
     "deliveryDefaults",
     "fulfillment",
+    // País de operación (nombre, ej. "El Salvador"). Cambiarlo dispara la
+    // propagación de region_settings.country a todos los negocios del hub.
+    "country",
 ];
 /** PUT /api/hubs/me  (HUB_OWNER/HUB_ADMIN) */
 function updateMyHub(req, res) {
@@ -240,6 +243,13 @@ function updateMyHub(req, res) {
                         patch["fulfillment.deliveryEnabled"] === false &&
                         patch["fulfillment.pickupEnabled"] === false) {
                         patch["fulfillment.pickupEnabled"] = true;
+                    }
+                }
+                else if (field === "country") {
+                    // Solo string no vacío y acotado (es required en el schema:
+                    // un valor vacío/basura rompería el registro del hub).
+                    if (typeof value === "string" && value.trim() && value.trim().length <= 80) {
+                        patch[field] = value.trim();
                     }
                 }
                 else if (field === "deliveryDefaults" || field === "fulfillment") {
@@ -296,6 +306,17 @@ function updateMyHub(req, res) {
                 }
                 catch (propagateError) {
                     console.error("No se pudo propagar la ubicación de entrega a los negocios del hub:", propagateError instanceof Error ? propagateError.message : propagateError);
+                }
+            }
+            // País de operación: si cambió, se re-sincroniza region_settings.country
+            // de TODOS sus negocios (el checkout resuelve el país por ahí). Mismo
+            // patrón best-effort que branding/deliveryDefaults.
+            if (patch["country"] !== undefined && (hub === null || hub === void 0 ? void 0 : hub.country)) {
+                try {
+                    yield (0, businessService_external_1.propagateHubRegionCountryExternal)(String(ctx.hubId), String(hub.country));
+                }
+                catch (propagateError) {
+                    console.error("No se pudo propagar el país a los negocios del hub:", propagateError instanceof Error ? propagateError.message : propagateError);
                 }
             }
             // Métodos de entrega (fulfillment): mismo patrón best-effort.

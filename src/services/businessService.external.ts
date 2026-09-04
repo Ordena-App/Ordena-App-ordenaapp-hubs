@@ -189,6 +189,19 @@ export async function propagateHubFulfillmentExternal(
     return data;
 }
 
+/**
+ * Propaga el país del hub a region_settings.country de TODOS sus negocios
+ * (el checkout resuelve el país del negocio por region_settings).
+ */
+export async function propagateHubRegionCountryExternal(hubId: string, country: string) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/region-country`,
+        { country },
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
 // ── Dominio custom del hub (F4): proxies de Vercel via business ──
 export async function addHubDomainExternal(domain: string) {
     const { data } = await axios.post(

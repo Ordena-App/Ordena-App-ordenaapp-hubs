@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import hubModel from "../models/hubModel";
 import hubCategoryModel from "../models/hubCategoryModel";
 import { INTERNAL_SHARED_SECRET } from "../config/config";
-import { propagateHubStorefrontThemeExternal, propagateHubDeliveryDefaultsExternal, propagateHubFulfillmentExternal } from "../services/businessService.external";
+import { propagateHubStorefrontThemeExternal, propagateHubDeliveryDefaultsExternal, propagateHubFulfillmentExternal, propagateHubRegionCountryExternal } from "../services/businessService.external";
 
 /**
  * GET /api/hubs/resolve?slug=oe-ya
@@ -174,6 +174,9 @@ const UPDATABLE_FIELDS = [
     "businessVisibility",
     "deliveryDefaults",
     "fulfillment",
+    // País de operación (nombre, ej. "El Salvador"). Cambiarlo dispara la
+    // propagación de region_settings.country a todos los negocios del hub.
+    "country",
 ] as const;
 
 /** PUT /api/hubs/me  (HUB_OWNER/HUB_ADMIN) */
@@ -220,6 +223,12 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
                     patch["fulfillment.pickupEnabled"] === false
                 ) {
                     patch["fulfillment.pickupEnabled"] = true;
+                }
+            } else if (field === "country") {
+                // Solo string no vacío y acotado (es required en el schema:
+                // un valor vacío/basura rompería el registro del hub).
+                if (typeof value === "string" && value.trim() && value.trim().length <= 80) {
+                    patch[field] = value.trim();
                 }
             } else if (field === "deliveryDefaults" || field === "fulfillment") {
                 // Solo se acepta como objeto: un `deliveryDefaults: null` crudo
@@ -282,6 +291,20 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
             } catch (propagateError) {
                 console.error(
                     "No se pudo propagar la ubicación de entrega a los negocios del hub:",
+                    propagateError instanceof Error ? propagateError.message : propagateError
+                );
+            }
+        }
+
+        // País de operación: si cambió, se re-sincroniza region_settings.country
+        // de TODOS sus negocios (el checkout resuelve el país por ahí). Mismo
+        // patrón best-effort que branding/deliveryDefaults.
+        if (patch["country"] !== undefined && hub?.country) {
+            try {
+                await propagateHubRegionCountryExternal(String(ctx.hubId), String(hub.country));
+            } catch (propagateError) {
+                console.error(
+                    "No se pudo propagar el país a los negocios del hub:",
                     propagateError instanceof Error ? propagateError.message : propagateError
                 );
             }
