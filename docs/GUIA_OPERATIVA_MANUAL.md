@@ -342,6 +342,32 @@ Revisa tu uso y tu plan desde el enlace.
 de Meta de no EMPEZAR con variable. Si aun así la rechazara, antepón
 `Hola — ` y listo (no requiere cambio de código).*
 
+### 6.5 Si un envío falla: dónde mirar y qué significa
+
+Cada intento queda en Mongo (`whatsapp_log`: `status`, `error`, `wamid`) y el
+detalle literal de Meta (`error_data.details`) en el log del bot (en prod el
+proceso pm2 se llama `Ordena-BOT`, no `Bot`):
+
+```bash
+grep -n -B6 -A10 "1320" ~/.pm2/logs/Ordena-BOT-error.log | tail -80
+```
+
+| `details` de Meta | Causa | Qué hacer |
+|---|---|---|
+| `Param text cannot have new-line/tab characters or more than 4 consecutive spaces` (#132018) | Un valor (dirección/referencia de un textarea) traía Enter/tab | Resuelto en el bot (commit 2026-09-08: `toValidText` normaliza); si reaparece, el bot de prod está desactualizado |
+| `number of ... params does not match` (#132000) | Conteo de variables del body distinto al de la tabla del §6 | Corregir la plantilla en Meta |
+| Botón con `%7B%7B1%7D%7D` en la URL | Se escribieron las llaves a mano; Meta las guardó como texto | Insertar la variable con el chip `{{1}}` (debe leerse 24/2000) |
+| `template name does not exist` (#132001) | Nombre o idioma distinto (`es_MX` en vez de `es`) | Renombrar o setear la env `TEMPLATE_*` |
+
+Para verificar cómo quedó una plantilla de verdad (no la UI), desde la
+carpeta del bot con sus envs cargadas:
+
+```bash
+curl -s "https://graph.facebook.com/v22.0/$WHATSAPP_BUSINESS_ID/message_templates?name=pedido_hub_es&fields=name,status,language,parameter_format,components" -H "Authorization: Bearer $WHATSAPP_TOKEN" | python3 -m json.tool
+```
+
+Debe decir `APPROVED`, `es`, `POSITIONAL` y botón `https://ordena.app/{{1}}`.
+
 **Tras la aprobación:** nada que configurar — los nombres coinciden con los
 defaults del código. El anti-duplicado ya está en dos capas (dedupeKey del bot
 + claim mensual en hubs para el aviso de 80%).
