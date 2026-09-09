@@ -184,6 +184,9 @@ export async function getMySettlementDetail(req: Request, res: Response): Promis
         if (!doc) {
             return res.status(404).json({ status: false, statusCode: 404, message: "Liquidación no encontrada", data: {} });
         }
+        if (ctx.role === "HUB_STAFF") {
+            return res.status(403).json({ status: false, statusCode: 403, message: "No tienes permisos para esta acción", data: {} });
+        }
         if (ctx.role === "BUSINESS_VIEWER" && String(doc.businessId) !== String(ctx.businessId || "")) {
             return res.status(403).json({ status: false, statusCode: 403, message: "No tienes acceso a esta liquidación", data: {} });
         }

@@ -187,10 +187,15 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
         // claves ya no borra las demás (antes el $set del objeto entero se
         // llevaba por delante deliveryWhatsapp, email, tiktok…).
         const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment"]);
+        // HUB_STAFF solo administra la operación: métodos/tarifa de entrega, zona por
+        // defecto y la matriz de visibilidad. Identidad, marca, contacto, país y
+        // liquidaciones son de dueño/admin; lo demás que mande se ignora.
+        const STAFF_FIELDS = new Set(["fulfillment", "deliveryDefaults", "businessVisibility"]);
         const patch: Record<string, unknown> = {};
         for (const field of UPDATABLE_FIELDS) {
             const value = req.body ? req.body[field] : undefined;
             if (value === undefined) continue;
+            if (ctx.role === "HUB_STAFF" && !STAFF_FIELDS.has(field)) continue;
             if (NESTED.has(field) && value && typeof value === "object" && !Array.isArray(value)) {
                 for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
                     if (inner === undefined) continue;
