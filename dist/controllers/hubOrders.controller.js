@@ -67,6 +67,8 @@ function stripOrderPII(order, visibility) {
         clean.delivery_city = null;
         clean.delivery_department = null;
         clean.delivery_reference = null;
+        // El pin exacto del cliente es tan sensible como la dirección.
+        clean.delivery_geo = null;
         // ship_to lleva la misma direccion por otro camino.
         shipTo.address_line1 = null;
         shipTo.city_locality = null;
