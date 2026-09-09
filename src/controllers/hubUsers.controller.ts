@@ -354,3 +354,63 @@ export async function deleteHubUser(req: Request, res: Response): Promise<Respon
         });
     }
 }
+
+/**
+ * PATCH /hub-users/me/password — cualquier usuario del hub cambia SU contraseña.
+ * Exige la contraseña actual (evita que una sesión abierta en otro equipo la
+ * cambie sin conocerla) y una nueva de al menos 8 caracteres distinta a la actual.
+ */
+export async function changeMyHubPassword(req: Request, res: Response): Promise<Response> {
+    try {
+        const ctx = req.hubContext!;
+        const { currentPassword, newPassword } = req.body || {};
+        const current = typeof currentPassword === "string" ? currentPassword : "";
+        const next = typeof newPassword === "string" ? newPassword : "";
+        if (!current || !next) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "currentPassword y newPassword son requeridos",
+                data: {},
+            });
+        }
+        if (next.length < 8 || next.length > 128) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "La nueva contraseña debe tener entre 8 y 128 caracteres.",
+                data: {},
+            });
+        }
+        if (next === current) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "La nueva contraseña debe ser distinta a la actual.",
+                data: {},
+            });
+        }
+        const user = await hubUserModel.findById(ctx.userId);
+        if (!user || user.status !== "ACTIVE" || String(user.hub_id) !== String(ctx.hubId)) {
+            return res.status(401).json({ status: false, statusCode: 401, message: "Sesión inválida", data: {} });
+        }
+        const ok = await bcrypt.compare(current, user.password);
+        if (!ok) {
+            return res.status(401).json({
+                status: false,
+                statusCode: 401,
+                message: "La contraseña actual no es correcta.",
+                data: {},
+            });
+        }
+        user.password = await bcrypt.hash(next, SALT_ROUNDS);
+        // Un cambio de contraseña invalida cualquier reset pendiente.
+        user.password_reset_token_hash = null;
+        user.password_reset_expires_at = null;
+        await user.save();
+        return res.status(200).json({ status: true, statusCode: 200, message: "Contraseña actualizada", data: {} });
+    } catch (error: any) {
+        console.error("Error en changeMyHubPassword:", error);
+        return res.status(500).json({ status: false, statusCode: 500, message: "Error interno del servidor", data: {} });
+    }
+}
