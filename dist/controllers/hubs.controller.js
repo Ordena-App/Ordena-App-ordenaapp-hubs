@@ -195,7 +195,7 @@ const UPDATABLE_FIELDS = [
 /** PUT /api/hubs/me  (HUB_OWNER/HUB_ADMIN) */
 function updateMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         try {
             const ctx = req.hubContext;
             // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
@@ -221,13 +221,35 @@ function updateMyHub(req, res) {
                             if (inner !== null && typeof inner !== "string")
                                 continue;
                         }
-                        // fulfillment: solo sus 3 claves; booleanos + fee número >= 0.
+                        // fulfillment: claves conocidas; booleanos, fee número >= 0,
+                        // pricingMode enum y distance {números >= 0, max null|>0} por dot-path.
                         if (field === "fulfillment") {
-                            if (!["deliveryEnabled", "pickupEnabled", "deliveryFee"].includes(key))
+                            if (!["deliveryEnabled", "pickupEnabled", "deliveryFee", "pricingMode", "distance"].includes(key))
                                 continue;
                             if (key === "deliveryFee") {
                                 if (typeof inner !== "number" || !Number.isFinite(inner) || inner < 0)
                                     continue;
+                            }
+                            else if (key === "pricingMode") {
+                                if (inner !== "flat" && inner !== "distance")
+                                    continue;
+                            }
+                            else if (key === "distance") {
+                                if (!inner || typeof inner !== "object" || Array.isArray(inner))
+                                    continue;
+                                for (const [dk, dv] of Object.entries(inner)) {
+                                    if (!["base_fee", "included_km", "price_per_km", "max_distance_km"].includes(dk))
+                                        continue;
+                                    if (dk === "max_distance_km") {
+                                        if (dv !== null && !(typeof dv === "number" && Number.isFinite(dv) && dv > 0))
+                                            continue;
+                                    }
+                                    else if (typeof dv !== "number" || !Number.isFinite(dv) || dv < 0) {
+                                        continue;
+                                    }
+                                    patch[`fulfillment.distance.${dk}`] = dv;
+                                }
+                                continue;
                             }
                             else if (typeof inner !== "boolean") {
                                 continue;
@@ -323,13 +345,7 @@ function updateMyHub(req, res) {
             const fulfillmentTouched = Object.keys(patch).some((k) => k.startsWith("fulfillment."));
             if (fulfillmentTouched && hub) {
                 try {
-                    yield (0, businessService_external_1.propagateHubFulfillmentExternal)(String(ctx.hubId), {
-                        deliveryEnabled: ((_j = hub.fulfillment) === null || _j === void 0 ? void 0 : _j.deliveryEnabled) !== false,
-                        pickupEnabled: ((_k = hub.fulfillment) === null || _k === void 0 ? void 0 : _k.pickupEnabled) !== false,
-                        deliveryFee: typeof ((_l = hub.fulfillment) === null || _l === void 0 ? void 0 : _l.deliveryFee) === "number" && hub.fulfillment.deliveryFee >= 0
-                            ? hub.fulfillment.deliveryFee
-                            : 0,
-                    });
+                    yield (0, businessService_external_1.propagateHubFulfillmentExternal)(String(ctx.hubId), (0, businessService_external_1.buildHubFulfillmentPayload)(hub.fulfillment));
                 }
                 catch (propagateError) {
                     console.error("No se pudieron propagar los métodos de entrega a los negocios del hub:", propagateError instanceof Error ? propagateError.message : propagateError);

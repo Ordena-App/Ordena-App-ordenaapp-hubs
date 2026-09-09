@@ -109,6 +109,17 @@ const hubSchema = new mongoose_1.Schema({
         deliveryEnabled: { type: Boolean, default: true },
         pickupEnabled: { type: Boolean, default: true },
         deliveryFee: { type: Number, default: 0 },
+        // Cómo se cobra el delivery en TODOS los negocios del hub:
+        //   'flat'     → deliveryFee plano (default).
+        //   'distance' → base + precio/km desde la ubicación de cada negocio
+        //                hasta el pin del cliente (ruta real con fallback).
+        pricingMode: { type: String, enum: ["flat", "distance"], default: "flat" },
+        distance: {
+            base_fee: { type: Number, default: 0 },
+            included_km: { type: Number, default: 0 },
+            price_per_km: { type: Number, default: 0 },
+            max_distance_km: { type: Number, default: null },
+        },
     },
     // Zona horaria del hub: cálculos de apertura, estadísticas y rotación de
     // métricas la respetan. Cada Business mantiene además su propio horario.

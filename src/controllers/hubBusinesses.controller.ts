@@ -8,6 +8,7 @@ import {
     getBusinessSettingsExternal,
     patchBusinessWeeklyHours,
     uploadBusinessLogoExternal,
+    buildHubFulfillmentPayload,
 } from "../services/businessService.external";
 
 // Traduce fallos del upstream (business-service) a respuestas claras.
@@ -133,14 +134,7 @@ export async function createBusinessForMyHub(req: Request, res: Response): Promi
                 : {}),
             // Métodos de entrega del hub: el checkout nace ofreciendo lo que el
             // operador decidió (default: delivery + recogida, tarifa 0).
-            fulfillment: {
-                deliveryEnabled: hub.fulfillment?.deliveryEnabled !== false,
-                pickupEnabled: hub.fulfillment?.pickupEnabled !== false,
-                deliveryFee:
-                    typeof hub.fulfillment?.deliveryFee === "number" && hub.fulfillment.deliveryFee >= 0
-                        ? hub.fulfillment.deliveryFee
-                        : 0,
-            },
+            fulfillment: buildHubFulfillmentPayload(hub.fulfillment),
         });
 
         await hubModel.updateOne(
@@ -242,6 +236,10 @@ export async function getMyHubBusinessDetail(req: Request, res: Response): Promi
                     industry: business.industry,
                     phone: business.phone,
                     address: business.address,
+                    country_code: business.country_code,
+                    // Pin del negocio (delivery por distancia del hub): sin él el dashboard
+                    // no podría hidratarlo y lo borraría al guardar la información.
+                    location: business.location ?? null,
                     operationalStatus: business.operationalStatus || "active",
                 },
                 businessHours,
@@ -265,6 +263,20 @@ export async function updateMyHubBusinessInfo(req: Request, res: Response): Prom
         const patch: Record<string, unknown> = {};
         for (const f of BUSINESS_INFO_FIELDS) {
             if (typeof (req.body || {})[f] === "string") patch[f] = (req.body as any)[f];
+        }
+        // Ubicación del negocio (pin): punto A del delivery por distancia.
+        // null limpia; el patch interno de business valida lat/lng.
+        if (Object.prototype.hasOwnProperty.call(req.body || {}, "location")) {
+            const loc = (req.body as any).location;
+            if (loc === null) {
+                patch.location = null;
+            } else if (loc && typeof loc === "object" && Number.isFinite(Number(loc.lat)) && Number.isFinite(Number(loc.lng))) {
+                patch.location = {
+                    lat: Number(loc.lat),
+                    lng: Number(loc.lng),
+                    source: ["pin", "geocode", "gps"].includes(loc.source) ? loc.source : "pin",
+                };
+            }
         }
         if (Object.keys(patch).length === 0) {
             return res.status(400).json({

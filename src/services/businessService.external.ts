@@ -42,7 +42,36 @@ export interface CreateHubBusinessPayload {
     /** deliveryDefaults del hub: el checkout del negocio nace con este prefill. */
     default_delivery_location?: { state?: string | null; stateIso?: string | null; city?: string | null };
     /** fulfillment del hub: métodos de entrega y tarifa con los que nace el checkout. */
-    fulfillment?: { deliveryEnabled?: boolean; pickupEnabled?: boolean; deliveryFee?: number };
+    fulfillment?: HubFulfillmentPayload;
+}
+
+export interface HubFulfillmentPayload {
+    deliveryEnabled: boolean;
+    pickupEnabled: boolean;
+    deliveryFee: number;
+    pricingMode: "flat" | "distance";
+    distance: { base_fee: number; included_km: number; price_per_km: number; max_distance_km: number | null };
+}
+
+/**
+ * Normaliza hub.fulfillment al payload que entiende business-service (siembra
+ * al crear negocio y propagación). Único lugar que conoce los defaults.
+ */
+export function buildHubFulfillmentPayload(raw: any): HubFulfillmentPayload {
+    const num = (v: any, def: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : def);
+    const maxRaw = raw?.distance?.max_distance_km;
+    return {
+        deliveryEnabled: raw?.deliveryEnabled !== false,
+        pickupEnabled: raw?.pickupEnabled !== false,
+        deliveryFee: num(raw?.deliveryFee, 0),
+        pricingMode: raw?.pricingMode === "distance" ? "distance" : "flat",
+        distance: {
+            base_fee: num(raw?.distance?.base_fee, 0),
+            included_km: num(raw?.distance?.included_km, 0),
+            price_per_km: num(raw?.distance?.price_per_km, 0),
+            max_distance_km: typeof maxRaw === "number" && Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : null,
+        },
+    };
 }
 
 export async function createHubBusiness(payload: CreateHubBusinessPayload) {
@@ -177,10 +206,7 @@ export async function propagateHubDeliveryDefaultsExternal(
  * Propaga los métodos de entrega del hub (fulfillment) al checkout de TODOS
  * sus negocios: delivery_options.{own_delivery, onSite, delivery(tarifa)}.
  */
-export async function propagateHubFulfillmentExternal(
-    hubId: string,
-    body: { deliveryEnabled: boolean; pickupEnabled: boolean; deliveryFee: number }
-) {
+export async function propagateHubFulfillmentExternal(hubId: string, body: HubFulfillmentPayload) {
     const { data } = await axios.patch(
         `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/fulfillment`,
         body,
