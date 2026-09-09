@@ -1,7 +1,8 @@
 # Guía operativa — pasos manuales para staging/producción (Modo Multi-Negocio)
 
-**Fecha:** 2026-09-01 · **Actualizada:** 2026-09-03 (estado git real + feature de
-prefill de dirección) · **Alcance:** todo lo que NO se hace con código: Meta
+**Fecha:** 2026-09-01 · **Actualizada:** 2026-09-08 (delivery **por distancia**:
+§2 `ORS_API_KEY`, §3 orden de deploy, §4b migración de planes, §8 punto 14) ·
+**Alcance:** todo lo que NO se hace con código: Meta
 (WhatsApp), Stripe, Vercel/DNS, variables de entorno, seed de Mongo y orden de
 despliegue. Cada dato de esta guía fue verificado contra el código de los repos
 (rama `feature/new-mode-ordena-hub`).
@@ -55,6 +56,8 @@ orders y payments usan `_LINK`. Setear la equivocada deja el default
 | `INTERNAL_HUBS_SECRET` | el del §1 | endpoints internos de hub |
 | `VERCEL_ACCESS_TOKEN` | token de Vercel (§7.2) | dominios custom (el token vive AQUÍ, no en hubs) |
 | `VERCEL_PROJECT_ID` | id del proyecto frontend en Vercel | dominios custom |
+| `ORS_API_KEY` | key **gratis** de openrouteservice.org (plan Standard: 2,000 rutas/día, 40/min) | delivery **por distancia**: ruta real por calles negocio → cliente. *Opcional*: sin ella se usa el OSRM público y, si tampoco responde, línea recta × 1.3 (`estimated`). Cada ruta se cachea 7 días en Mongo (`delivery_route_cache`), así que la cuota rinde para miles de pedidos/mes. ⚠️ La key que se pegó en el chat el 2026-09-08 debe **regenerarse** en el panel de ORS antes de usarla. |
+| `OSRM_URL` / `ORS_BASE_URL` / `OSRM_PUBLIC_URL` | *no tocar* (defaults: vacío / `https://api.heigit.org/openrouteservice` / `https://router.project-osrm.org`) | solo si algún día se monta un OSRM propio o ORS cambia de host |
 
 ### ordenaapp-orders (:3005)
 | Env | Valor | Para qué |
@@ -126,6 +129,21 @@ dashboard muestra éxito sin persistir nada. No rompe nada, pero la sección
 nueva funciona "en falso" hasta desplegar business. El resto de repos no
 tiene acoplamiento de orden entre sí (hubs↔business se hablan best-effort).
 
+⚠️ **Delivery por distancia (2026-09-08) — orden `business → orders → gateway → hubs → frontend`:**
+- `ordenaapp-business` primero: expone `GET /business/:id/delivery-quote` y
+  `GET /geocode/search`, acepta `location` y `delivery_options.distance_pricing`.
+- `ordenaapp-orders` después: en `createOrder` llama a esa cotización para
+  recalcular el envío (fail-open: si business no responde acepta el precio del
+  cliente; si el servidor cobra MÁS responde `409 delivery_price_changed` y el
+  checkout refresca la tarifa; nunca se cobra de más en silencio).
+- `ordenaapp-api-gateway`: abre los dos GET públicos anteriores. Si el frontend
+  sale antes que el gateway, la cotización por distancia falla y el checkout
+  cae a la tarifa base (no rompe, pero no mide distancia).
+- `ordenaapp-hubs`: `fulfillment.pricingMode` + `fulfillment.distance` (se
+  propagan a los negocios vía business).
+- `ordenaapp-frontend` al final. Repos tocados por esta feature: business,
+  orders, api-gateway, hubs, agencies (solo catálogo de features) y frontend.
+
 ---
 
 ## 4. Mongo: seed del catálogo de planes (`hub_plans`)
@@ -164,6 +182,31 @@ Re-aplica los límites del catálogo a todos los hubs suscritos. Solo toca
 `subscription.limits` (no pisa estado/periodo/lookupKey — seguro sobre la
 sub manual de Oe Ya). Es un cambio de datos: no hace falta redeploy ni
 restart, con recargar la página del plan basta.
+
+---
+
+## 4b. Mongo: plan gate del delivery por distancia (`canUseDistancePricing`)
+
+La estrategia **Por distancia** está disponible en CORE desde **Profesional y
+Empresarial** (mensual o anual); en White Label la agencia la activa/desactiva
+en su plan (`canUseDistancePricing`, catálogo de agencias); los hubs la tienen
+siempre. El backend valida `planFeatures.canUseDistancePricing === false` al
+guardar la estrategia y el dashboard la muestra bloqueada. Mientras NO se
+corra la migración, el snapshot de los negocios CORE viejos toma el default del
+schema (`true`) — el dashboard ya bloquea por tier, pero para que el backend
+también lo haga hay que refrescar los snapshots (en business, contra la DB de
+cada entorno):
+
+```bash
+cd ordenaapp-business && npx ts-node scripts/migrate-plans-v2.ts
+```
+
+```bash
+cd ordenaapp-business && npx ts-node scripts/migrate-businesses-planfeatures.ts
+```
+
+Ambos scripts son idempotentes y solo añaden la key nueva (`FREE`/`BASIC`
+= false, `PRO`/`ENTERPRISE` = true). No hace falta redeploy después.
 
 ---
 
@@ -444,6 +487,21 @@ En orden — cada punto valida una pieza de la configuración:
     ⚠️ Los negocios de hub creados ANTES de este deploy nacieron con delivery
     apagado: basta con **guardar Ajustes una vez** tras el deploy para que la
     propagación los sincronice (no hay backfill automático).
+14. Delivery **por distancia** (hub): `/hub-admin/ajustes` → Métodos de entrega
+    → "Por distancia" → tarifa base / km incluidos / precio por km / radio →
+    guardar. Luego `/hub-admin/negocios/{id}` → **Ubicación en el mapa** →
+    "Usar mi ubicación" o "Buscar por la dirección" → ajustar el pin → guardar.
+    En el checkout de ese negocio: modo manual muestra el paso "Tu ubicación en
+    el mapa"; al fijar el pin aparece la ruta pintada (línea continua = ruta
+    real; punteada = aproximación) con los km y el precio; fuera del radio
+    sale "fuera del radio" y no deja pedir. Sin pin del negocio, cobra solo la
+    tarifa base (aviso ámbar en el detalle del negocio).
+    Extra SaaS: dashboard clásico → Ajustes → Delivery → tarjeta **Por
+    distancia** (bloqueada en Gratis/Básico) → fijar ubicación + tarifas →
+    "Guardar cobro por distancia". Verificación de servidor: crear el pedido y
+    en Mongo `orders` ver `delivery_distance_km`, `delivery_geo`,
+    `delivery_pricing_strategy: 'distance'`; en `delivery_route_cache` debe
+    aparecer la ruta (provider `ors` si hay key, `osrm-public` si no).
 
 ---
 
@@ -472,6 +530,8 @@ staging a producción (en orden):
 9. ☐ Repetir el smoke test del §8 sobre prod con un hub de prueba (y borrarlo
    o dejarlo como demo).
 10. ☐ Alta de Oe Ya con la sub manual del §5.3.
+11. ☐ `ORS_API_KEY` (regenerada) en business de prod (§2) + correr los dos
+    scripts del §4b contra la DB de prod + smoke del punto 14 del §8.
 
 ---
 

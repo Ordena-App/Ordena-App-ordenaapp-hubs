@@ -12,6 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.buildHubFulfillmentPayload = buildHubFulfillmentPayload;
 exports.createHubBusiness = createHubBusiness;
 exports.getBusinessesByHubId = getBusinessesByHubId;
 exports.getBusinessById = getBusinessById;
@@ -47,6 +48,27 @@ const config_1 = require("../config/config");
 // ============================================================================
 function internalHeaders(extra) {
     return Object.assign(Object.assign({}, (config_1.INTERNAL_SHARED_SECRET ? { "x-ordena-secret": config_1.INTERNAL_SHARED_SECRET } : {})), (extra || {}));
+}
+/**
+ * Normaliza hub.fulfillment al payload que entiende business-service (siembra
+ * al crear negocio y propagación). Único lugar que conoce los defaults.
+ */
+function buildHubFulfillmentPayload(raw) {
+    var _a, _b, _c, _d;
+    const num = (v, def) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : def);
+    const maxRaw = (_a = raw === null || raw === void 0 ? void 0 : raw.distance) === null || _a === void 0 ? void 0 : _a.max_distance_km;
+    return {
+        deliveryEnabled: (raw === null || raw === void 0 ? void 0 : raw.deliveryEnabled) !== false,
+        pickupEnabled: (raw === null || raw === void 0 ? void 0 : raw.pickupEnabled) !== false,
+        deliveryFee: num(raw === null || raw === void 0 ? void 0 : raw.deliveryFee, 0),
+        pricingMode: (raw === null || raw === void 0 ? void 0 : raw.pricingMode) === "distance" ? "distance" : "flat",
+        distance: {
+            base_fee: num((_b = raw === null || raw === void 0 ? void 0 : raw.distance) === null || _b === void 0 ? void 0 : _b.base_fee, 0),
+            included_km: num((_c = raw === null || raw === void 0 ? void 0 : raw.distance) === null || _c === void 0 ? void 0 : _c.included_km, 0),
+            price_per_km: num((_d = raw === null || raw === void 0 ? void 0 : raw.distance) === null || _d === void 0 ? void 0 : _d.price_per_km, 0),
+            max_distance_km: typeof maxRaw === "number" && Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : null,
+        },
+    };
 }
 function createHubBusiness(payload) {
     return __awaiter(this, void 0, void 0, function* () {
