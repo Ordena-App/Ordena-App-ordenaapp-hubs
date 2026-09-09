@@ -19,6 +19,7 @@ exports.getHubUsers = getHubUsers;
 exports.deleteHubUser = deleteHubUser;
 exports.changeMyHubPassword = changeMyHubPassword;
 const bcrypt_1 = __importDefault(require("bcrypt"));
+const config_1 = require("../config/config");
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const hubUserModel_1 = __importDefault(require("../models/hubUserModel"));
 const auth_1 = require("../utils/auth");
@@ -35,6 +36,14 @@ const SALT_ROUNDS = 10;
 function registerHubWithOwner(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
+            if (!config_1.HUB_SELF_SERVE_SIGNUP) {
+                return res.status(403).json({
+                    status: false,
+                    statusCode: 403,
+                    message: "La creación de hubs no es autoservicio. Escríbenos y lo activamos contigo.",
+                    data: {},
+                });
+            }
             const { hubName, slug: rawSlug, country, currency, email, password, name, timezone, language } = req.body || {};
             if (!hubName || !country || !currency || !email || !password) {
                 return res.status(400).json({

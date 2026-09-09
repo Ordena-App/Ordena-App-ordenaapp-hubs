@@ -5,6 +5,9 @@ config();
 export const PORT = process.env.PORT || 3013;
 export const DB_LINK = process.env.DB_LINK || 'mongodb://localhost:27017/ordena_app_nosql_db';
 export const JWT_SECRET = process.env.JWT_SECRET || 'hubs-service-secret';
+// Registro público de hubs (autoservicio). Apagado por defecto: los hubs los crea
+// Ordena tras lead → reunión → propuesta → acuerdo.
+export const HUB_SELF_SERVE_SIGNUP = process.env.HUB_SELF_SERVE_SIGNUP === 'true';
 
 export const BUSINESS_SERVICE_LINK = process.env.BUSINESS_SERVICE_LINK || 'http://localhost:3002/api';
 export const ORDERS_SERVICE_LINK = process.env.ORDERS_SERVICE_LINK || 'http://localhost:3005/api';

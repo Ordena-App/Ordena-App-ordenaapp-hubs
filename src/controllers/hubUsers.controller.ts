@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
+import { HUB_SELF_SERVE_SIGNUP } from "../config/config";
 import hubModel from "../models/hubModel";
 import hubUserModel, { HubUserRole } from "../models/hubUserModel";
 import { signHubToken } from "../utils/auth";
@@ -17,6 +18,14 @@ const SALT_ROUNDS = 10;
  */
 export async function registerHubWithOwner(req: Request, res: Response): Promise<Response> {
     try {
+        if (!HUB_SELF_SERVE_SIGNUP) {
+            return res.status(403).json({
+                status: false,
+                statusCode: 403,
+                message: "La creación de hubs no es autoservicio. Escríbenos y lo activamos contigo.",
+                data: {},
+            });
+        }
         const { hubName, slug: rawSlug, country, currency, email, password, name, timezone, language } = req.body || {};
 
         if (!hubName || !country || !currency || !email || !password) {
