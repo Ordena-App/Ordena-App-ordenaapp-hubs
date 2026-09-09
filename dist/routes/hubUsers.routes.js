@@ -7,6 +7,8 @@ const router = (0, express_1.Router)();
 // ---- Públicas (onboarding self-serve + login de todos los roles) ----
 router.post("/register", hubUsers_controller_1.registerHubWithOwner);
 router.post("/login", hubUsers_controller_1.loginHubUser);
+// ---- Sesión propia (cualquier rol): cambio de contraseña ----
+router.patch("/me/password", auth_1.verifyHubJWT, hubUsers_controller_1.changeMyHubPassword);
 // ---- Protegidas ----
 router.get("/", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubUsers_controller_1.getHubUsers);
 router.post("/", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubUsers_controller_1.createHubUser);
