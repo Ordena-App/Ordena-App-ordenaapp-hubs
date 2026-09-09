@@ -15,8 +15,8 @@ const router = Router();
 router.post("/register", registerHubWithOwner);
 router.post("/login", loginHubUser);
 
-// ---- Sesión propia (cualquier rol): cambio de contraseña ----
-router.patch("/me/password", verifyHubJWT, changeMyHubPassword);
+// ---- Sesión propia: cambio de contraseña (solo dueño y admins) ----
+router.patch("/me/password", verifyHubJWT, requireHubRole("HUB_OWNER", "HUB_ADMIN"), changeMyHubPassword);
 
 // ---- Protegidas ----
 router.get("/", verifyHubJWT, requireHubRole("HUB_OWNER", "HUB_ADMIN"), getHubUsers);

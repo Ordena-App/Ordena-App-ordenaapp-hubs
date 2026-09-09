@@ -8,7 +8,7 @@ const router = (0, express_1.Router)();
 router.get("/me/portal/settlements", auth_1.verifyHubJWT, hubSettlements_controller_1.getMyPortalSettlements);
 // Liquidaciones del hub
 router.post("/me/settlements/generate", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubSettlements_controller_1.generateMySettlements);
-router.get("/me/settlements", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubSettlements_controller_1.listMySettlements);
+router.get("/me/settlements", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubSettlements_controller_1.listMySettlements);
 // El detalle lo puede ver también el BUSINESS_VIEWER dueño (candado en el controller)
 router.get("/me/settlements/:id", auth_1.verifyHubJWT, hubSettlements_controller_1.getMySettlementDetail);
 router.patch("/me/settlements/:id/paid", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubSettlements_controller_1.markMySettlementPaid);
