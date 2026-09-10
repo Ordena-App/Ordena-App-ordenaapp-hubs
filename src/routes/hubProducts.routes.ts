@@ -11,8 +11,10 @@ import {
     getMyBusinessProviders,
     createMyBusinessProvider,
     createMyBusinessCategory,
+    updateMyBusinessCategory,
+    deleteMyBusinessCategory,
 } from "../controllers/hubProducts.controller";
-import { verifyHubJWT, requireHubRole } from "../utils/auth";
+import { verifyHubJWT, requireCatalogAccess } from "../utils/auth";
 
 // Imágenes en memoria: se re-envían a products-service, que las sube al bucket.
 // Solo imágenes: evita que se suba y sirva contenido arbitrario desde el bucket.
@@ -52,13 +54,13 @@ const router = Router();
 router.get(
     "/me/businesses/:businessId/products",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
     getMyBusinessProducts
 );
 router.post(
     "/me/businesses/:businessId/products",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN"),
     upload.array("images", 4),
     uploadErrorHandler,
     createMyBusinessProduct
@@ -66,54 +68,69 @@ router.post(
 router.patch(
     "/me/businesses/:businessId/products/:productId",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
     upload.array("newImages", 4),
     updateMyBusinessProduct
 );
 router.delete(
     "/me/businesses/:businessId/products/:productId",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN"),
     deleteMyBusinessProduct
 );
 router.patch(
     "/me/products/:productId/hub-categories",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN"),
     setMyProductHubCategories
 );
 
 router.get(
     "/me/businesses/:businessId/categories",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
     getMyBusinessCategories
 );
 
 router.get(
     "/me/businesses/:businessId/package-templates",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
     getMyBusinessPackageTemplates
 );
 router.get(
     "/me/businesses/:businessId/providers",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
     getMyBusinessProviders
 );
 router.post(
     "/me/businesses/:businessId/providers",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
     createMyBusinessProvider
 );
 router.post(
     "/me/businesses/:businessId/categories",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
     upload.array("image", 1),
     createMyBusinessCategory
+);
+
+router.patch(
+    "/me/businesses/:businessId/categories/:categoryId",
+    verifyHubJWT,
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    upload.array("image", 1),
+    uploadErrorHandler,
+    updateMyBusinessCategory
+);
+router.delete(
+    "/me/businesses/:businessId/categories/:categoryId",
+    verifyHubJWT,
+    requireCatalogAccess("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    deleteMyBusinessCategory
 );
 
 export default router;

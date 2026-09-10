@@ -13,6 +13,11 @@ const hubUserSchema = new mongoose_1.Schema({
     },
     // Solo aplica (y es requerido) cuando role === 'BUSINESS_VIEWER'
     business_id: { type: String, default: null },
+    // Permisos finos del BUSINESS_VIEWER (los concede/quita el hub desde Usuarios).
+    permissions: {
+        // Crear/editar/borrar productos y categorías de SU negocio desde el portal.
+        manageCatalog: { type: Boolean, default: false },
+    },
     status: { type: String, enum: ["ACTIVE", "SUSPENDED"], default: "ACTIVE" },
     password_reset_token_hash: { type: String, default: null },
     password_reset_expires_at: { type: Date, default: null },

@@ -18,6 +18,8 @@ exports.createHubUser = createHubUser;
 exports.getHubUsers = getHubUsers;
 exports.deleteHubUser = deleteHubUser;
 exports.changeMyHubPassword = changeMyHubPassword;
+exports.getMyHubUser = getMyHubUser;
+exports.updateHubUserPermissions = updateHubUserPermissions;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const config_1 = require("../config/config");
 const hubModel_1 = __importDefault(require("../models/hubModel"));
@@ -127,6 +129,7 @@ function registerHubWithOwner(req, res) {
  */
 function loginHubUser(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
         try {
             const { email, password } = req.body || {};
             if (!email || !password) {
@@ -183,6 +186,7 @@ function loginHubUser(req, res) {
                 email: user.email,
                 role: user.role,
                 business_id: user.business_id || null,
+                permissions: { manageCatalog: ((_a = user.permissions) === null || _a === void 0 ? void 0 : _a.manageCatalog) === true },
             };
             return res.status(200).json({
                 status: true,
@@ -209,7 +213,7 @@ function loginHubUser(req, res) {
  */
 function createHubUser(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a;
+        var _a, _b, _c, _d;
         try {
             const ctx = req.hubContext;
             const { email, password, name, role, businessId } = req.body || {};
@@ -249,7 +253,7 @@ function createHubUser(req, res) {
                 try {
                     yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, String(businessId));
                 }
-                catch (_b) {
+                catch (_e) {
                     return res.status(400).json({
                         status: false,
                         statusCode: 400,
@@ -275,8 +279,18 @@ function createHubUser(req, res) {
                 password: hashed,
                 role,
                 business_id: role === "BUSINESS_VIEWER" ? String(businessId) : null,
+                permissions: {
+                    manageCatalog: role === "BUSINESS_VIEWER" && (((_b = req.body) === null || _b === void 0 ? void 0 : _b.manageCatalog) === true || ((_c = req.body) === null || _c === void 0 ? void 0 : _c.manageCatalog) === "true"),
+                },
             });
-            const safeUser = { _id: user._id, name: user.name, email: user.email, role: user.role, business_id: user.business_id };
+            const safeUser = {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                business_id: user.business_id,
+                permissions: { manageCatalog: ((_d = user.permissions) === null || _d === void 0 ? void 0 : _d.manageCatalog) === true },
+            };
             return res.status(201).json({
                 status: true,
                 statusCode: 201,
@@ -425,6 +439,78 @@ function changeMyHubPassword(req, res) {
         }
         catch (error) {
             console.error("Error en changeMyHubPassword:", error);
+            return res.status(500).json({ status: false, statusCode: 500, message: "Error interno del servidor", data: {} });
+        }
+    });
+}
+/** GET /hub-users/me — usuario de la sesión (para refrescar permisos sin re-login). */
+function getMyHubUser(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        try {
+            const ctx = req.hubContext;
+            const user = yield hubUserModel_1.default
+                .findOne({ _id: ctx.userId, hub_id: ctx.hubId })
+                .select("-password -password_reset_token_hash -password_reset_expires_at")
+                .lean();
+            if (!user || user.status !== "ACTIVE") {
+                return res.status(401).json({ status: false, statusCode: 401, message: "Sesión inválida", data: {} });
+            }
+            return res.status(200).json({
+                status: true,
+                statusCode: 200,
+                message: "Usuario de la sesión",
+                data: {
+                    user: {
+                        _id: user._id,
+                        name: user.name,
+                        email: user.email,
+                        role: user.role,
+                        business_id: user.business_id || null,
+                        permissions: { manageCatalog: ((_a = user.permissions) === null || _a === void 0 ? void 0 : _a.manageCatalog) === true },
+                    },
+                },
+            });
+        }
+        catch (error) {
+            console.error("Error en getMyHubUser:", error);
+            return res.status(500).json({ status: false, statusCode: 500, message: "Error interno del servidor", data: {} });
+        }
+    });
+}
+/**
+ * PATCH /hub-users/:id/permissions  (HUB_OWNER / HUB_ADMIN)
+ * Body: { manageCatalog: boolean }. Solo aplica a usuarios BUSINESS_VIEWER del hub.
+ */
+function updateHubUserPermissions(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        try {
+            const ctx = req.hubContext;
+            const raw = (_a = req.body) === null || _a === void 0 ? void 0 : _a.manageCatalog;
+            if (typeof raw !== "boolean" && raw !== "true" && raw !== "false") {
+                return res.status(400).json({ status: false, statusCode: 400, message: "manageCatalog (boolean) es requerido", data: {} });
+            }
+            const manageCatalog = raw === true || raw === "true";
+            const user = yield hubUserModel_1.default.findOne({ _id: String(req.params.id), hub_id: ctx.hubId });
+            if (!user) {
+                return res.status(404).json({ status: false, statusCode: 404, message: "Usuario no encontrado", data: {} });
+            }
+            if (user.role !== "BUSINESS_VIEWER") {
+                return res.status(400).json({ status: false, statusCode: 400, message: "Este permiso solo aplica a usuarios del portal de negocio", data: {} });
+            }
+            user.permissions = Object.assign(Object.assign({}, (user.permissions || {})), { manageCatalog });
+            user.updated_at = new Date();
+            yield user.save();
+            return res.status(200).json({
+                status: true,
+                statusCode: 200,
+                message: manageCatalog ? "Gestión de catálogo habilitada" : "Gestión de catálogo deshabilitada",
+                data: { user: { _id: user._id, permissions: { manageCatalog } } },
+            });
+        }
+        catch (error) {
+            console.error("Error en updateHubUserPermissions:", error);
             return res.status(500).json({ status: false, statusCode: 500, message: "Error interno del servidor", data: {} });
         }
     });

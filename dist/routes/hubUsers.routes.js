@@ -9,8 +9,12 @@ router.post("/register", hubUsers_controller_1.registerHubWithOwner);
 router.post("/login", hubUsers_controller_1.loginHubUser);
 // ---- Sesión propia: cambio de contraseña (solo dueño y admins) ----
 router.patch("/me/password", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubUsers_controller_1.changeMyHubPassword);
+// Usuario de la sesión (cualquier rol): refresca permisos sin volver a iniciar sesión.
+router.get("/me", auth_1.verifyHubJWT, hubUsers_controller_1.getMyHubUser);
 // ---- Protegidas ----
 router.get("/", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubUsers_controller_1.getHubUsers);
 router.post("/", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubUsers_controller_1.createHubUser);
 router.delete("/:id", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubUsers_controller_1.deleteHubUser);
+// Permisos finos de un BUSINESS_VIEWER (gestión de catálogo desde el portal).
+router.patch("/:id/permissions", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubUsers_controller_1.updateHubUserPermissions);
 exports.default = router;

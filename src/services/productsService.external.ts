@@ -191,3 +191,38 @@ export async function createBusinessCategoryExternal(
     const { data } = await axios.post(url, fd, cfg);
     return data;
 }
+
+/** Actualiza una categoría interna del negocio (PATCH /category/:id; 'image' opcional). */
+export async function updateBusinessCategoryExternal(
+    businessId: string,
+    categoryId: string,
+    fields: Record<string, unknown>,
+    files: UploadedFile[]
+) {
+    const url = `${PRODUCTS_SERVICE_LINK}/category/${categoryId}`;
+    const cfg = { timeout: 20000, headers: headers(businessId) };
+    if (files.length === 0) {
+        const { data } = await axios.patch(url, { ...fields, businessId }, cfg);
+        return data;
+    }
+    const FormDataCtor: any = (globalThis as any).FormData;
+    const fd = new FormDataCtor();
+    fd.append("businessId", businessId);
+    for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined && value !== null) fd.append(key, String(value));
+    }
+    for (const f of files) {
+        fd.append("image", new Blob([f.buffer as unknown as ArrayBuffer], { type: f.mimetype }), f.originalname);
+    }
+    const { data } = await axios.patch(url, fd, cfg);
+    return data;
+}
+
+/** Elimina una categoría interna del negocio (DELETE /category/:id). */
+export async function deleteBusinessCategoryExternal(businessId: string, categoryId: string) {
+    const { data } = await axios.delete(`${PRODUCTS_SERVICE_LINK}/category/${categoryId}`, {
+        timeout: 15000,
+        headers: headers(businessId),
+    });
+    return data;
+}

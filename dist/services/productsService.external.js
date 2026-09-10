@@ -23,6 +23,8 @@ exports.listPackageTemplatesExternal = listPackageTemplatesExternal;
 exports.listBusinessProvidersExternal = listBusinessProvidersExternal;
 exports.createBusinessProviderExternal = createBusinessProviderExternal;
 exports.createBusinessCategoryExternal = createBusinessCategoryExternal;
+exports.updateBusinessCategoryExternal = updateBusinessCategoryExternal;
+exports.deleteBusinessCategoryExternal = deleteBusinessCategoryExternal;
 const axios_1 = __importDefault(require("axios"));
 const buffer_1 = require("buffer");
 const config_1 = require("../config/config");
@@ -181,6 +183,39 @@ function createBusinessCategoryExternal(businessId, fields, files) {
             fd.append("image", new buffer_1.Blob([f.buffer], { type: f.mimetype }), f.originalname);
         }
         const { data } = yield axios_1.default.post(url, fd, cfg);
+        return data;
+    });
+}
+/** Actualiza una categoría interna del negocio (PATCH /category/:id; 'image' opcional). */
+function updateBusinessCategoryExternal(businessId, categoryId, fields, files) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const url = `${config_1.PRODUCTS_SERVICE_LINK}/category/${categoryId}`;
+        const cfg = { timeout: 20000, headers: headers(businessId) };
+        if (files.length === 0) {
+            const { data } = yield axios_1.default.patch(url, Object.assign(Object.assign({}, fields), { businessId }), cfg);
+            return data;
+        }
+        const FormDataCtor = globalThis.FormData;
+        const fd = new FormDataCtor();
+        fd.append("businessId", businessId);
+        for (const [key, value] of Object.entries(fields)) {
+            if (value !== undefined && value !== null)
+                fd.append(key, String(value));
+        }
+        for (const f of files) {
+            fd.append("image", new buffer_1.Blob([f.buffer], { type: f.mimetype }), f.originalname);
+        }
+        const { data } = yield axios_1.default.patch(url, fd, cfg);
+        return data;
+    });
+}
+/** Elimina una categoría interna del negocio (DELETE /category/:id). */
+function deleteBusinessCategoryExternal(businessId, categoryId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.delete(`${config_1.PRODUCTS_SERVICE_LINK}/category/${categoryId}`, {
+            timeout: 15000,
+            headers: headers(businessId),
+        });
         return data;
     });
 }

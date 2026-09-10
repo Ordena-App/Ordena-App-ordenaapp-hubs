@@ -13,6 +13,8 @@ import {
     listBusinessProvidersExternal,
     createBusinessProviderExternal,
     createBusinessCategoryExternal,
+    updateBusinessCategoryExternal,
+    deleteBusinessCategoryExternal,
 } from "../services/productsService.external";
 
 // Gestión de productos de los negocios del hub (F2.1). Regla de oro intacta:
@@ -181,6 +183,10 @@ export async function setMyProductHubCategories(req: Request, res: Response): Pr
     const ctx = req.hubContext!;
     try {
         const productId = String(req.params.productId);
+        // BUSINESS_VIEWER (con permiso de catálogo): solo productos de SU negocio.
+        if (ctx.role === "BUSINESS_VIEWER") {
+            await assertProductBelongsToBusiness(String(ctx.businessId || ""), productId);
+        }
         const raw = (req.body || {}).hubCategoryIds;
         if (!Array.isArray(raw)) {
             return res.status(400).json({
@@ -280,5 +286,58 @@ export async function createMyBusinessCategory(req: Request, res: Response): Pro
         return res.status(201).json(data);
     } catch (error: any) {
         return upstreamError(res, error, "crear la categoría");
+    }
+}
+
+/** Candado: la categoría debe ser del negocio (products acota por x-business-id; aquí se valida además). */
+async function assertCategoryBelongsToBusiness(businessId: string, categoryId: string): Promise<void> {
+    let categories: any[] = [];
+    try {
+        categories = await listBusinessCategoriesExternal(businessId);
+    } catch {
+        categories = [];
+    }
+    if (!categories.some((c: any) => String(c?._id) === String(categoryId))) {
+        const err: any = new Error("category_not_in_business");
+        err.response = {
+            status: 403,
+            data: { status: false, statusCode: 403, message: "La categoría no pertenece a este negocio", data: {} },
+        };
+        throw err;
+    }
+}
+
+/** PATCH /api/hubs/me/businesses/:businessId/categories/:categoryId (multipart: 'image' opcional) */
+export async function updateMyBusinessCategory(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const businessId = String(req.params.businessId);
+        const categoryId = String(req.params.categoryId);
+        await assertBusinessBelongsToHub(ctx.hubId, businessId);
+        await assertCategoryBelongsToBusiness(businessId, categoryId);
+        const files: UploadedFile[] = Array.isArray((req as any).files) ? ((req as any).files as UploadedFile[]) : [];
+        const fields = passThroughBody(req.body);
+        if (Object.keys(fields).length === 0 && files.length === 0) {
+            return res.status(400).json({ status: false, statusCode: 400, message: "Nada que actualizar", data: {} });
+        }
+        const data = await updateBusinessCategoryExternal(businessId, categoryId, fields, files);
+        return res.status(200).json(data);
+    } catch (error: any) {
+        return upstreamError(res, error, "actualizar la categoría");
+    }
+}
+
+/** DELETE /api/hubs/me/businesses/:businessId/categories/:categoryId */
+export async function deleteMyBusinessCategory(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const businessId = String(req.params.businessId);
+        const categoryId = String(req.params.categoryId);
+        await assertBusinessBelongsToHub(ctx.hubId, businessId);
+        await assertCategoryBelongsToBusiness(businessId, categoryId);
+        const data = await deleteBusinessCategoryExternal(businessId, categoryId);
+        return res.status(200).json(data);
+    } catch (error: any) {
+        return upstreamError(res, error, "eliminar la categoría");
     }
 }

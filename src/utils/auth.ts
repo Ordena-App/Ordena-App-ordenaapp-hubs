@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../config/config";
-import { HubUserRole } from "../models/hubUserModel";
+import hubUserModel, { HubUserRole } from "../models/hubUserModel";
 
 export interface HubContext {
     userId: string;
@@ -107,6 +107,40 @@ export function requireHubRole(...roles: HubUserRole[]) {
                 data: {},
             });
         }
+        return next();
+    };
+}
+
+/**
+ * Acceso al catálogo (productos/categorías) de un negocio.
+ *  - Roles de hub indicados → igual que requireHubRole.
+ *  - BUSINESS_VIEWER → solo SU negocio (si la ruta trae :businessId debe ser el
+ *    suyo) y solo si el hub le concedió `permissions.manageCatalog`. El permiso se
+ *    lee de la DB en cada request: revocarlo aplica al instante aunque el JWT
+ *    siga vigente. En rutas sin :businessId el controller valida la pertenencia.
+ */
+export function requireCatalogAccess(...roles: HubUserRole[]) {
+    return async (req: Request, res: Response, next: NextFunction): Promise<any> => {
+        const ctx = req.hubContext;
+        const deny = (message: string) =>
+            res.status(403).json({ status: false, statusCode: 403, message, data: {} });
+        if (!ctx) return deny("No tienes permisos para esta acción");
+        if (ctx.role === "BUSINESS_VIEWER") {
+            const requested = req.params?.businessId ? String(req.params.businessId) : "";
+            if (!ctx.businessId || (requested && requested !== String(ctx.businessId))) {
+                return deny("Solo puedes gestionar el catálogo de tu negocio");
+            }
+            try {
+                const user: any = await hubUserModel.findById(ctx.userId).select("permissions status").lean();
+                if (!user || user.status !== "ACTIVE" || user.permissions?.manageCatalog !== true) {
+                    return deny("El hub no te ha habilitado la gestión del catálogo");
+                }
+            } catch {
+                return deny("No se pudo validar el permiso");
+            }
+            return next();
+        }
+        if (!roles.includes(ctx.role)) return deny("No tienes permisos para esta acción");
         return next();
     };
 }
