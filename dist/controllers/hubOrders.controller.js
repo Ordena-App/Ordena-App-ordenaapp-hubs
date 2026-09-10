@@ -210,6 +210,8 @@ function getMyBusinessPortalSummary(req, res) {
                         _id: business._id,
                         name: business.name,
                         hubSlug: business.hubSlug,
+                        // Slug público real ({hubSlug}--{sufijo}): el portal arma con él el link al ticket térmico.
+                        store_link: business.store_link,
                         image_url: business.image_url,
                         operationalStatus: business.operationalStatus || "active",
                     },

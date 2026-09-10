@@ -61,7 +61,7 @@ Chicos, visibles y sin riesgo. Se hacen los tres juntos y salen en un solo deplo
 
 ## 2. Sprint 1 — semanas 2 y 3
 
-### 2.1 Liquidaciones configurables (para cualquier hub)
+### 2.1 Liquidaciones configurables (para cualquier hub) — ✅ hecho 2026-09-09
 Alcance:
 - Frecuencia por hub en Ajustes → Liquidaciones: **diaria, semanal, quincenal, mensual**. Día de inicio de semana configurable (lunes por defecto) y quincena = días 1–15 y 16–fin de mes.
 - Clave de período por frecuencia (`2026-09-09`, `2026-W37`, `2026-09-Q1`, `2026-09`). El índice único y la regla "pagadas no se recalculan" se conservan tal cual.
@@ -74,7 +74,7 @@ Decisiones que necesito: día de inicio de semana por defecto y si la quincena e
 
 **Tamaño:** 3 días.
 
-### 2.2 Ticket térmico 58 mm y 80 mm
+### 2.2 Ticket térmico 58 mm y 80 mm — ✅ hecho 2026-09-09 (pendiente prueba en impresora real)
 - Ruta de impresión del pedido con dos anchos, tipografía monoespaciada y CSS de página para que el navegador imprima directo a la térmica.
 - Contenido: nombre y logo del hub, **datos completos del negocio** (nombre, teléfono, dirección), número visible e ID completo, fecha/hora, cliente (respetando la matriz de visibilidad del hub), ítems con variantes y notas, subtotal, envío (con km si es por distancia), descuento, total, método de pago, dirección de entrega, referencia y **QR** al pedido para que el repartidor abra el pin.
 - Botón "Imprimir ticket" en el drawer del hub-admin, en el detalle del negocio (dashboard y portal) y en el ticket web público.
@@ -82,7 +82,7 @@ Decisiones que necesito: día de inicio de semana por defecto y si la quincena e
 
 **Tamaño:** 2 días.
 
-### 2.3 Catálogo autogestionado por el negocio (portal del negocio)
+### 2.3 Catálogo autogestionado por el negocio (portal del negocio) — pendiente de tu ok
 Alcance completo, como pidió Noe:
 - Nuevo permiso por usuario de negocio: **"gestiona su catálogo"**, que el hub concede o quita desde Usuarios. El `BUSINESS_VIEWER` actual sigue existiendo sin permiso (solo lectura).
 - Portal del negocio → Productos: crear, editar, imágenes, precio, variantes básicas, **disponibilidad** con un toggle, borrar (lógico).
@@ -191,6 +191,6 @@ Por qué así:
 ## 10. Decisiones
 1. ✅ Orden de sprints aprobado (2026-09-09). Sprint 0 en curso.
 2. ✅ Precio: Hub $249 / Hub Pro $399 / Empresarial desde $699; anual con 1.5 meses gratis; Oe Ya con gracia de 3 meses y precio fundador $149 (§7).
-3. Liquidaciones: día de inicio de semana y definición de quincena.
+3. ✅ Liquidaciones: semana de lunes a domingo; quincena 1–15 y 16–fin de mes.
 4. Bolsa: acceso del repartidor (teléfono+PIN o email+contraseña) y si el hub puede asignar a mano además de la bolsa.
 5. Repartidor: teléfono del cliente apagado por defecto (propuesta) o encendido.

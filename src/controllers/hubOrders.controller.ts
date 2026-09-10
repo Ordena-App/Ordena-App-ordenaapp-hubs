@@ -200,6 +200,8 @@ export async function getMyBusinessPortalSummary(req: Request, res: Response): P
                     _id: business._id,
                     name: business.name,
                     hubSlug: business.hubSlug,
+                    // Slug público real ({hubSlug}--{sufijo}): el portal arma con él el link al ticket térmico.
+                    store_link: business.store_link,
                     image_url: business.image_url,
                     operationalStatus: business.operationalStatus || "active",
                 },

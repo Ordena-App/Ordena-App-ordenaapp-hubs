@@ -230,6 +230,20 @@ cd ordenaapp-orders && npx ts-node src/scripts/backfillOrderNumbers.ts          
 
 Opcional: `npx ts-node src/scripts/backfillOrderNumbers.ts <businessId>` para un solo negocio.
 
+## 4d. Liquidaciones por frecuencia (Sprint 1)
+
+Cada hub elige en **Liquidaciones → Comisiones → Frecuencia de corte**: diaria, semanal
+(lunes a domingo), quincenal (1–15 y 16–fin de mes) o mensual. Se guarda en
+`hub.settlementConfig.frequency` (default `monthly`, así los hubs existentes no cambian).
+La clave del período depende de la frecuencia (`YYYY-MM-DD`, `YYYY-Www`, `YYYY-MM-Q1|Q2`,
+`YYYY-MM`) y el corte se calcula en la zona horaria del hub. Cambiar la frecuencia no toca
+lo ya generado. Sin migración: no hay nada que correr.
+
+**Ticket térmico:** `/{store_link}/ordenes/{id}/ticket?w=58|80&print=1` (público, como el
+ticket web). Botones en el ticket web, en el detalle del pedido del dashboard, en el drawer
+del hub-admin y en el portal del negocio. Probar en una impresora real de 58 y otra de 80
+antes de darlo por cerrado (pedir modelo a Oe Ya).
+
 ---
 
 ## 5. Stripe (paso a paso)
