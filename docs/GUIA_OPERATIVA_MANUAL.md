@@ -239,6 +239,13 @@ La clave del período depende de la frecuencia (`YYYY-MM-DD`, `YYYY-Www`, `YYYY-
 `YYYY-MM`) y el corte se calcula en la zona horaria del hub. Cambiar la frecuencia no toca
 lo ya generado. Sin migración: no hay nada que correr.
 
+**Catálogo autogestionado (portal del negocio):** el hub concede por usuario de portal el
+permiso "Gestiona su catálogo" (Usuarios → toggle en la fila, o casilla al crearlo). Con él,
+el negocio ve en su portal las pestañas Productos (mismo editor del hub: fotos, variantes,
+precio, stock, disponibilidad) y Categorías (propias de su tienda). El backend exige el
+permiso en cada request y lo acota a SU negocio; el hub sigue viendo y editando todo. Sin
+migración: los usuarios existentes quedan en solo lectura hasta que se les active.
+
 **Ticket térmico:** `/{store_link}/ordenes/{id}/ticket?w=58|80&print=1` (público, como el
 ticket web). Botones en el ticket web, en el detalle del pedido del dashboard, en el drawer
 del hub-admin y en el portal del negocio. Probar en una impresora real de 58 y otra de 80

@@ -82,7 +82,7 @@ Decisiones que necesito: día de inicio de semana por defecto y si la quincena e
 
 **Tamaño:** 2 días.
 
-### 2.3 Catálogo autogestionado por el negocio (portal del negocio) — pendiente de tu ok
+### 2.3 Catálogo autogestionado por el negocio (portal del negocio) — ✅ hecho 2026-09-10 (fases A y B)
 Alcance completo, como pidió Noe:
 - Nuevo permiso por usuario de negocio: **"gestiona su catálogo"**, que el hub concede o quita desde Usuarios. El `BUSINESS_VIEWER` actual sigue existiendo sin permiso (solo lectura).
 - Portal del negocio → Productos: crear, editar, imágenes, precio, variantes básicas, **disponibilidad** con un toggle, borrar (lógico).
