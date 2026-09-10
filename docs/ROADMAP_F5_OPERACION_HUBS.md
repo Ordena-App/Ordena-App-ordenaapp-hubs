@@ -137,27 +137,36 @@ Se construyen cuando haya 3 a 4 semanas de datos reales del piloto. Desde ya se 
 
 ---
 
-## 7. Precio: cómo cobrar lo que sale del alcance base
+## 7. Planes y precio (decidido el 2026-09-09)
 
-Planes actuales: **Plan Piloto $149/mes** y **Plan Hub $199/mes**, ambos con 20 negocios y 1,800 pedidos incluidos, $5 por negocio extra y $0.10 por pedido extra.
+Principio: **todos los planes incluyen todas las funciones**. Lo que cambia es cuánto pueden procesar. Dos niveles autoservicio y un Empresarial que se cotiza en reunión.
 
-Referencias de valor:
-- Un negocio en SaaS paga **$12.99/mes (Básico)** por administrar su propio catálogo y pedidos. Dar autogestión a 20 negocios de un hub tiene un valor de mercado de unos $260/mes.
-- Para el hub, el valor es tiempo del operador: mantener 20 catálogos a mano son horas cada semana.
-- El costo de infraestructura de estas funciones es casi cero.
+| | Hub | Hub Pro | Empresarial |
+|---|---|---|---|
+| Precio mensual | **$249** | **$399** | desde $699, a medida |
+| Precio anual (1.5 meses gratis) | **$2,600** | **$4,190** | negociado |
+| Negocios incluidos | 20 | 50 | 100 o más |
+| Productos | 100 por negocio | 300 por negocio | sin límite |
+| Pedidos al mes | 1,800 | 5,000 | 15,000 o más |
+| Negocio extra sin upgrade | $5/mes | $5/mes | negociado |
+| Pedido extra sin upgrade | $0.10 | $0.08 | negociado |
+| Paquete +100 productos para un negocio | $5/mes | $5/mes | no aplica |
+| Funciones | todas | todas | todas + onboarding asistido, soporte dedicado, factura a medida |
 
-**Recomendación: empaquetar por niveles, no vender piezas sueltas.**
+Por qué así:
+- **$249 / $399:** con todo incluido, el escalón tiene que estar en capacidad. El salto de $150 hace que el upgrade convenga justo cuando toca: quedarse en Hub y pagar 30 negocios extra cuesta lo mismo que el Pro, pero con 1,800 pedidos en vez de 5,000. Cada negocio le sale al hub $12.45, menos que un solo Básico de SaaS ($12.99).
+- **Negocio extra a $5** en ambos, por debajo del costo dentro del plan a propósito: cada negocio trae pedidos y los pedidos son lo que escala la cuenta.
+- **Pedido extra** un poco por encima del costo dentro del plan; cubre los WhatsApp reales de cada pedido.
+- **Productos por negocio** y no un total del hub: un negocio grande no se come el cupo de los demás.
+- **Anual** con 1.5 meses gratis (12.5%): suficiente para cobrar por adelantado sin regalar de más.
 
-| Plan | Precio | Incluye |
-|---|---|---|
-| Plan Hub (actual) | $199/mes | Todo lo de hoy; el hub administra los catálogos; liquidación mensual; ticket térmico. |
-| **Plan Hub Pro (nuevo)** | **$249/mes** | Lo anterior + catálogo autogestionado por los negocios + liquidaciones configurables + bolsa de repartidores + envíos A→B cuando estén. Mismos límites y extras. |
+**Oe Ya (fundadores del piloto):**
+1. Meses 1 a 3: gracia sin costo, mientras salen Sprint 0, liquidaciones, tickets, catálogo autogestionado y bolsa.
+2. Meses 4 a 15: **precio fundador $149** (Plan Piloto existente, 40% bajo lista) con los límites del Hub; si necesitan límites de Pro, $100 de descuento sobre $399.
+3. Después: recomendado mantener el precio fundador mientras la suscripción siga activa (cliente de referencia); alternativa: lista con 60 días de aviso.
+4. Acuerdo piloto de una página: cadencia de feedback, logo y caso de éxito, precio fundador atado al plan Hub.
 
-Por qué $249: son $50 más por mes, $2.50 por negocio si usa los 20, cinco veces menos que lo que pagarían esos negocios en SaaS, y deja margen de sobra. Es un número que se explica en una frase.
-
-Alternativa si prefieres a la carta: complemento **"Autogestión de catálogo" a $2 por negocio activo al mes**, mínimo $20. Para Oe Ya con 20 negocios son $40. Funciona, pero cada hub nuevo obliga a negociar piezas.
-
-Para Oe Ya, por ser piloto: propongo incluir el nivel Pro sin costo durante 3 meses a cambio del feedback que ya están dando, y pasarlos a $249 al terminar. Es tu decisión.
+**Qué implica en el producto (Sprint 1):** límite de productos por negocio y paquete extra en el modelo de planes de hub, uso contra límites en la página Plan, bloqueo al crear productos al llegar al tope con aviso de paquete o upgrade, y los dos planes nuevos en Stripe (lookup keys mensual y anual). Los excedentes de negocios y pedidos ya se cobran con el sistema actual. Un día de trabajo.
 
 ---
 
@@ -179,9 +188,9 @@ Para Oe Ya, por ser piloto: propongo incluir el nivel Pro sin costo durante 3 me
 - **Migraciones:** al deployar el delivery por distancia hay que correr `migrate-plans-v2` y `migrate-businesses-planfeatures` en business (guía operativa §4b).
 - **Datos personales:** con repartidores como usuarios, revisar el aviso de privacidad del hub hacia sus clientes.
 
-## 10. Decisiones pendientes de tu lado
-1. Aprobar el orden de sprints o moverlo.
-2. Precio: niveles ($249 Pro) o complemento por negocio ($2), y qué hacer con Oe Ya durante el piloto.
+## 10. Decisiones
+1. ✅ Orden de sprints aprobado (2026-09-09). Sprint 0 en curso.
+2. ✅ Precio: Hub $249 / Hub Pro $399 / Empresarial desde $699; anual con 1.5 meses gratis; Oe Ya con gracia de 3 meses y precio fundador $149 (§7).
 3. Liquidaciones: día de inicio de semana y definición de quincena.
 4. Bolsa: acceso del repartidor (teléfono+PIN o email+contraseña) y si el hub puede asignar a mano además de la bolsa.
 5. Repartidor: teléfono del cliente apagado por defecto (propuesta) o encendido.

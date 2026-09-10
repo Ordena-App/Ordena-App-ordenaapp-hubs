@@ -44,6 +44,7 @@ orders y payments usan `_LINK`. Setear la equivocada deja el default
 |---|---|---|
 | `INTERNAL_HUBS_SECRET` | el del §1 | ✅ |
 | `JWT_SECRET` | valor propio fuerte | ✅ **el default está en el repo — sin override cualquiera forja un token de HUB_OWNER** |
+| `HUB_SELF_SERVE_SIGNUP` | **no ponerla** (o `false`) | Registro público de hubs (`POST /hub-users/register`). Apagado por defecto: los hubs los crea Ordena tras lead → reunión → propuesta → acuerdo. Solo `true` si algún día se abre el autoservicio. En el frontend la pestaña "Crear mi hub" del login también está apagada salvo `NEXT_PUBLIC_HUB_SELF_SERVE_SIGNUP=true`. |
 | `BUSINESS_SERVICE_LINK` | `http://<business>:3002/api` | ✅ |
 | `ORDERS_SERVICE_LINK` | `http://<orders>:3005/api` | ✅ |
 | `PRODUCTS_SERVICE_LINK` | `http://<products>:3004/api` | ✅ |
@@ -207,6 +208,27 @@ cd ordenaapp-business && npx ts-node scripts/migrate-businesses-planfeatures.ts
 
 Ambos scripts son idempotentes y solo añaden la key nueva (`FREE`/`BASIC`
 = false, `PRO`/`ENTERPRISE` = true). No hace falta redeploy después.
+
+---
+
+## 4c. Mongo: número de pedido por negocio (`orderNumber`) — orders
+
+Desde el Sprint 0 de F5 cada pedido nuevo recibe un número correlativo **por negocio**
+(`#1, #2, …`) con un contador atómico (`order_counters`). Los pedidos anteriores no lo
+tienen: el listado del negocio se los calcula por posición cronológica, pero el hub-admin,
+el ticket público y los WhatsApp mostraban un fragmento del `_id`. El backfill numera lo
+existente con **el mismo número que el negocio ya veía** y deja el contador al día.
+Idempotente: se puede correr varias veces. Correr **después** de deployar orders.
+
+```bash
+cd ordenaapp-orders && DRY_RUN=1 npx ts-node src/scripts/backfillOrderNumbers.ts   # solo reporta
+```
+
+```bash
+cd ordenaapp-orders && npx ts-node src/scripts/backfillOrderNumbers.ts            # aplica
+```
+
+Opcional: `npx ts-node src/scripts/backfillOrderNumbers.ts <businessId>` para un solo negocio.
 
 ---
 
@@ -532,6 +554,11 @@ staging a producción (en orden):
 10. ☐ Alta de Oe Ya con la sub manual del §5.3.
 11. ☐ `ORS_API_KEY` (regenerada) en business de prod (§2) + correr los dos
     scripts del §4b contra la DB de prod + smoke del punto 14 del §8.
+12. ☐ Tras deployar orders: `backfillOrderNumbers` del §4c contra la DB de prod
+    (primero con `DRY_RUN=1`). Verificar que un pedido viejo muestre el mismo `#N`
+    en dashboard del negocio, hub-admin y ticket.
+13. ☐ Confirmar que `HUB_SELF_SERVE_SIGNUP` NO está en el .env de hubs de prod y que
+    `/hub-admin/login` ya no ofrece "Crear mi hub".
 
 ---
 
