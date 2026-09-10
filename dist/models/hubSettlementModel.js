@@ -16,6 +16,8 @@ const mongoose_1 = require("mongoose");
  */
 const settlementLineSchema = new mongoose_1.Schema({
     orderId: { type: String },
+    // Número visible del pedido (#N por negocio); null en pedidos previos al backfill.
+    orderNumber: { type: Number, default: null },
     date: { type: Date },
     total: { type: Number },
     paymentType: { type: String },
@@ -26,7 +28,10 @@ const hubSettlementSchema = new mongoose_1.Schema({
     // Snapshot del nombre (si el negocio se renombra, la liquidación histórica
     // sigue diciendo lo que decía cuando se emitió).
     businessName: { type: String },
-    period: { type: String, required: true }, // YYYY-MM (mes calendario en la TZ del hub)
+    // Clave del período según la frecuencia del hub al generar (TZ del hub):
+    // YYYY-MM-DD · YYYY-Www · YYYY-MM-Q1|Q2 · YYYY-MM. Única por hub+negocio.
+    period: { type: String, required: true },
+    frequency: { type: String, enum: ["daily", "weekly", "biweekly", "monthly"], default: "monthly" },
     periodStart: { type: Date, required: true },
     periodEnd: { type: Date, required: true },
     ordersCount: { type: Number, default: 0 },

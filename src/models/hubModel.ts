@@ -174,6 +174,10 @@ const hubSchema = new Schema({
     settlementConfig: {
         commissionType: { type: String, enum: ["percent", "fixed", "none"], default: "percent" },
         commissionValue: { type: Number, default: 0 },
+        // Frecuencia de corte de las liquidaciones. Define el formato del período:
+        // daily YYYY-MM-DD · weekly YYYY-Www (lunes a domingo) · biweekly YYYY-MM-Q1|Q2
+        // (1–15 y 16–fin de mes) · monthly YYYY-MM. Cambiarla no toca lo ya generado.
+        frequency: { type: String, enum: ["daily", "weekly", "biweekly", "monthly"], default: "monthly" },
     },
     commissionOverrides: {
         type: [

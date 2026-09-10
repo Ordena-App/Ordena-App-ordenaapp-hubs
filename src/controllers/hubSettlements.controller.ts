@@ -4,24 +4,80 @@ import hubSettlementModel from "../models/hubSettlementModel";
 import { getHubSettlementLines, } from "../services/ordersService.external";
 import { getBusinessesByHubId, assertBusinessBelongsToHub } from "../services/businessService.external";
 
+export type SettlementFrequency = "daily" | "weekly" | "biweekly" | "monthly";
+
+const PERIOD_PATTERNS: Record<SettlementFrequency, RegExp> = {
+    daily: /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/,
+    weekly: /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/,
+    biweekly: /^\d{4}-(0[1-9]|1[0-2])-Q[12]$/,
+    monthly: /^\d{4}-(0[1-9]|1[0-2])$/,
+};
+
+/** Frecuencia implícita en la clave del período (null si el formato no es válido). */
+export function detectPeriodFrequency(period: string): SettlementFrequency | null {
+    for (const key of Object.keys(PERIOD_PATTERNS) as SettlementFrequency[]) {
+        if (PERIOD_PATTERNS[key].test(period)) return key;
+    }
+    return null;
+}
+
+// Offset de la zona en ese instante (técnica estándar sin librerías de TZ).
+function tzOffsetMs(utcGuess: Date, tz: string): number {
+    const local = new Date(utcGuess.toLocaleString("en-US", { timeZone: tz }));
+    const utc = new Date(utcGuess.toLocaleString("en-US", { timeZone: "UTC" }));
+    return utc.getTime() - local.getTime();
+}
+
+/** Medianoche local (en la TZ del hub) de una fecha civil, expresada en UTC. Acepta desbordes de día/mes. */
+function localMidnightUtc(year: number, monthIndex: number, day: number, tz: string): Date {
+    const guess = new Date(Date.UTC(year, monthIndex, day));
+    return new Date(guess.getTime() + tzOffsetMs(guess, tz));
+}
+
+/** Lunes (fecha civil UTC) de la semana ISO `week` del año `year`. */
+function isoWeekMonday(year: number, week: number): { year: number; monthIndex: number; day: number } {
+    const jan4 = new Date(Date.UTC(year, 0, 4));
+    const jan4Weekday = (jan4.getUTCDay() + 6) % 7; // lunes = 0
+    const monday = new Date(jan4.getTime() - jan4Weekday * 86400000 + (week - 1) * 7 * 86400000);
+    return { year: monday.getUTCFullYear(), monthIndex: monday.getUTCMonth(), day: monday.getUTCDate() };
+}
+
 /**
- * Mes calendario [inicio, fin] expresado en UTC para una zona horaria dada.
- * Los pedidos se guardan en UTC; el corte del mes debe ser el del HUB (que el
- * pedido de las 11pm del 31 caiga en el mes que el operador vive, no en UTC).
+ * Rango [inicio, fin] en UTC de un período según su clave, con el corte en la zona
+ * horaria del HUB (que el pedido de las 11pm del último día caiga en el período que
+ * el operador vive, no en UTC). Semana = lunes a domingo; quincena = 1–15 y 16–fin.
  */
-function monthRangeInTz(period: string, tz: string): { start: Date; end: Date } {
-    const [y, m] = period.split("-").map((n) => parseInt(n, 10));
-    // Offset de la zona en ese momento (técnica estándar sin librerías de TZ)
-    const offsetAt = (utcGuess: Date): number => {
-        const local = new Date(utcGuess.toLocaleString("en-US", { timeZone: tz }));
-        const utc = new Date(utcGuess.toLocaleString("en-US", { timeZone: "UTC" }));
-        return utc.getTime() - local.getTime();
-    };
-    const startGuess = new Date(Date.UTC(y, m - 1, 1));
-    const endGuess = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1));
-    const start = new Date(startGuess.getTime() + offsetAt(startGuess));
-    const end = new Date(endGuess.getTime() + offsetAt(endGuess) - 1);
-    return { start, end };
+function periodRangeInTz(period: string, tz: string): { start: Date; end: Date; frequency: SettlementFrequency } {
+    const frequency = detectPeriodFrequency(period);
+    if (!frequency) throw new Error("PERIOD_INVALID");
+    let start: Date;
+    let endExclusive: Date;
+    if (frequency === "daily") {
+        const [y, m, d] = period.split("-").map((n) => parseInt(n, 10));
+        start = localMidnightUtc(y, m - 1, d, tz);
+        endExclusive = localMidnightUtc(y, m - 1, d + 1, tz);
+    } else if (frequency === "weekly") {
+        const [ys, ws] = period.split("-W");
+        const monday = isoWeekMonday(parseInt(ys, 10), parseInt(ws, 10));
+        start = localMidnightUtc(monday.year, monday.monthIndex, monday.day, tz);
+        endExclusive = localMidnightUtc(monday.year, monday.monthIndex, monday.day + 7, tz);
+    } else if (frequency === "biweekly") {
+        const [ys, ms, q] = period.split("-");
+        const y = parseInt(ys, 10);
+        const m0 = parseInt(ms, 10) - 1;
+        if (q === "Q1") {
+            start = localMidnightUtc(y, m0, 1, tz);
+            endExclusive = localMidnightUtc(y, m0, 16, tz);
+        } else {
+            start = localMidnightUtc(y, m0, 16, tz);
+            endExclusive = localMidnightUtc(y, m0 + 1, 1, tz);
+        }
+    } else {
+        const [y, m] = period.split("-").map((n) => parseInt(n, 10));
+        start = localMidnightUtc(y, m - 1, 1, tz);
+        endExclusive = localMidnightUtc(y, m, 1, tz);
+    }
+    return { start, end: new Date(endExclusive.getTime() - 1), frequency };
 }
 
 function resolveCommission(
@@ -43,7 +99,10 @@ function round2(n: number): number {
 
 /**
  * POST /api/hubs/me/settlements/generate  (HUB_OWNER / HUB_ADMIN)
- * Body: { period: 'YYYY-MM', businessId? }.
+ * Body: { period, businessId? } — period según la frecuencia del hub:
+ * YYYY-MM-DD (diaria) · YYYY-Www (semanal, lunes a domingo) · YYYY-MM-Q1|Q2
+ * (quincenal) · YYYY-MM (mensual). Cualquier formato válido se acepta, así una
+ * liquidación mensual antigua se puede regenerar aunque el hub ya corte semanal.
  * Genera (o RE-genera, mientras no esté PAID) la liquidación del período para
  * un negocio o para todos los del hub. La cifra sale de re-contar orders
  * (entregados y pagados); la comisión, del override del negocio o del default.
@@ -52,8 +111,13 @@ export async function generateMySettlements(req: Request, res: Response): Promis
     const ctx = req.hubContext!;
     try {
         const period = String(req.body?.period || "").trim();
-        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
-            return res.status(400).json({ status: false, statusCode: 400, message: "period debe ser YYYY-MM", data: {} });
+        if (!detectPeriodFrequency(period)) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "period inválido: usa YYYY-MM-DD (diario), YYYY-Www (semanal), YYYY-MM-Q1|Q2 (quincenal) o YYYY-MM (mensual)",
+                data: {},
+            });
         }
         const requestedBusinessId = req.body?.businessId ? String(req.body.businessId) : null;
 
@@ -64,7 +128,7 @@ export async function generateMySettlements(req: Request, res: Response): Promis
         if (!hub) {
             return res.status(404).json({ status: false, statusCode: 404, message: "Hub no encontrado", data: {} });
         }
-        const { start, end } = monthRangeInTz(period, hub.timezone || "America/El_Salvador");
+        const { start, end, frequency } = periodRangeInTz(period, hub.timezone || "America/El_Salvador");
 
         // Universo de negocios a liquidar
         let businesses: Array<{ _id: string; name?: string }> = [];
@@ -109,6 +173,7 @@ export async function generateMySettlements(req: Request, res: Response): Promis
                 {
                     $set: {
                         businessName: biz.name || null,
+                        frequency,
                         periodStart: start,
                         periodEnd: end,
                         ordersCount,
