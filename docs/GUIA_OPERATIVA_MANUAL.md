@@ -460,6 +460,36 @@ defaults del código. El anti-duplicado ya está en dos capas (dedupeKey del bot
 
 ---
 
+### 6.6 `pedido_confirmado_cliente_es` (aviso al cliente — Sprint 4, pedirla YA)
+Se envía UNA vez, cuando el pedido pasa a **confirmado** (por el hub si confirma pedidos,
+o por el negocio en SaaS/WL). Es el único mensaje que recibe el cliente final; no ha
+escrito al número del bot, así que no cabe mensaje libre: tiene que ser plantilla.
+Una sola plantilla sirve para hubs, SaaS y White Label. La firma el número del bot que ya
+envía las otras cuatro; no hace falta nada nuevo en Meta salvo crearla y esperar la aprobación.
+
+- **Nombre:** `pedido_confirmado_cliente_es` · **Categoría:** Utilidad · **Idioma:** Español (`es`)
+
+**Body:**
+```
+✅ ¡Hola {{1}}! Tu pedido #{{2}} en {{3}} está confirmado.
+
+Tiempo estimado de entrega: {{4}}.
+{{5}}
+
+Puedes seguir tu pedido en el enlace.
+```
+**Botón:** URL dinámica · texto `Ver mi pedido` · URL `https://ordena.app/{{1}}`
+(sufijo real: `{store_link}/ordenes/{orderId}`, igual que las demás).
+**Ejemplos:** 1 `María` · 2 `1042` · 3 `Cafe Cena Fonseca` · 4 `35 a 40 minutos` ·
+5 `El repartidor se comunicará contigo cuando llegue a tu domicilio.`
+*(Cuando el negocio no tiene tiempo estimado, {{4}} llega como `lo antes posible`; en
+pedidos para recoger, {{5}} dice `Te avisaremos cuando esté listo para recoger.`)*
+
+Cuando Meta la apruebe: el nombre por defecto que usará orders es ese; si la nombras
+distinto, `TEMPLATE_CUSTOMER_CONFIRMED_ES=<nombre>` en el .env de orders (§2).
+
+---
+
 ## 7. Vercel y DNS
 
 ### 7.1 Wildcard de subdominios (los hubs viven en `{slug}.ordena.app`)
@@ -580,6 +610,13 @@ staging a producción (en orden):
     en dashboard del negocio, hub-admin y ticket.
 13. ☐ Confirmar que `HUB_SELF_SERVE_SIGNUP` NO está en el .env de hubs de prod y que
     `/hub-admin/login` ya no ofrece "Crear mi hub".
+14. ☐ Sprint 1.5: tras deployar business + hubs + frontend, entrar a **Ajustes del hub →
+    Guardar cambios** una vez (propaga "Efectivo contra entrega" a `payment_methods.cash`
+    de los negocios existentes; los nuevos ya nacen con él). Verificar en el checkout de un
+    negocio del hub que la pantalla de pago ofrece efectivo y que el carrito llega lleno al
+    checkout entrando por el directorio del hub.
+15. ☐ Crear en Meta la plantilla del §6.6 (aviso al cliente) para que esté aprobada al
+    llegar al Sprint 4.
 
 ---
 

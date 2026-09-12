@@ -176,9 +176,9 @@ Por qué así:
 |---|---|---|
 | 1 | Favicon, ID de pedido, cierre de "Crear hub", onboarding Oe Ya. | ✅ |
 | 2–3 | Liquidaciones configurables; ticket térmico; catálogo autogestionado A y B. | ✅ |
-| 4 | **Sprint 1.5 — arreglos de la 2.ª reunión:** carrito vacío en el checkout del hub, efectivo contra entrega en la pantalla de pago, opciones a $0 sin "0" pegado y precio extra desde $0.01, tiempo estimado por negocio (dato). | siguiente |
-| 5–7 | **Sprint 2 — Flujo del pedido y bolsa de repartidores:** confirmación del hub (configurable), estados del negocio y de entrega, bolsa con "Tomar pedido", asignación manual, app móvil del repartidor, privacidad hacia el motorizado. | |
-| 8 | **Sprint 3 — Pagos manuales con comprobante:** el cliente adjunta el comprobante y "Confirma pago"; destinatario del aviso configurable (hub o negocio); métodos de pago a nivel hub propagados. Aplica también a SaaS y WL. | |
+| 4 | **Sprint 1.5 — arreglos de la 2.ª reunión:** carrito vacío en el checkout del hub, efectivo contra entrega, opciones a $0 sin "0" pegado, tiempo estimado por negocio (lo edita el hub o, si el hub lo permite, cada negocio desde su portal; en SaaS/WL el dueño). | ✅ 2026-09-11 |
+| 5 | **Sprint 2 — Pagos manuales con comprobante:** el cliente adjunta el comprobante y "Confirma pago"; el comprobante se ve en el detalle del pedido (hub, negocio, ticket) con link al ticket; destinatario del aviso configurable (hub o negocio); métodos de pago a nivel hub propagados. Aplica también a SaaS y WL. | siguiente |
+| 6–8 | **Sprint 3 — Flujo del pedido y bolsa de repartidores:** confirmación del hub (configurable), estados del negocio y de entrega, bolsa con "Tomar pedido", asignación manual por el hub, app móvil del repartidor (acceso con email y contraseña), privacidad hacia el motorizado. | |
 | 9 | **Sprint 4 — Avisos al cliente por WhatsApp:** plantilla de pedido confirmado con tiempo estimado por negocio (pedir a Meta desde ya). | |
 | 10–11 | **Sprint 5 — Liquidación de repartidores:** comisión global o por repartidor, cobros que retiene (efectivo/Yape), bonos y ajustes, cortes diario/semanal/quincenal/mensual, dashboard del repartidor. | |
 | 12–13 | Envío A→B (entra a la bolsa). | |
@@ -274,9 +274,10 @@ Lo nuevo es un **módulo completo de operación de motorizados** (bolsa, app, es
 - Con el módulo de motorizados en producción conviene **revisar la lista para hubs nuevos** a $279 / $449. No lo subiría hoy: primero que exista y se vea funcionando en Oe Ya.
 - Oe Ya conserva el precio fundador de §7 con los límites del Hub; los repartidores extra se le cobran igual que a cualquiera cuando pase el período de gracia.
 
-### 11.8 Decisiones que necesito
+### 11.8 Decisiones (cerradas el 2026-09-11)
 
-1. Orden de sprints de §11.6, o mover pagos con comprobante antes de la bolsa.
-2. Confirmar la tercera dimensión de repartidores (5 / 15 / ilimitado, $5 extra) o dejar repartidores ilimitados en todos los planes.
-3. Pedir ya la plantilla de Meta del aviso al cliente (necesito el nombre del negocio/hub que la firma y el número del bot que se usará).
-4. Confirmar que el hub puede asignar repartidor a mano además de la bolsa, y el acceso del repartidor (teléfono + PIN o email + contraseña).
+1. **Orden:** pagos con comprobante (Sprint 2) antes que la bolsa (Sprint 3). El comprobante aplica a SaaS, WL y hubs; en el detalle del pedido se muestra como prueba junto al link del ticket.
+2. **Repartidores como límite de plan:** se define al final, con datos (Oe Ya tiene ~80 motorizados, así que 5/15 no sirve). Mientras tanto, ilimitados.
+3. **Plantilla de Meta del aviso al cliente:** la especificación completa está en la guía operativa §6.6; se crea en Meta y, aprobada, solo hay que respetar el nombre por defecto o ponerlo en `TEMPLATE_CUSTOMER_CONFIRMED_ES`.
+4. **Repartidor:** acceso con **email y contraseña** (el PIN por SMS/WhatsApp cuesta mensajes). El hub **sí** puede asignar un pedido a un repartidor concreto además de publicarlo en la bolsa.
+5. **Tiempo estimado por negocio:** interruptor por hub "Cada negocio define su tiempo estimado"; apagado = lo pone el hub en Negocios → Información; encendido = también el negocio desde su portal. En SaaS/WL lo pone el dueño en Ajustes → Delivery. Hecho en el Sprint 1.5.
