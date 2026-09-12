@@ -190,6 +190,7 @@ export async function getMyBusinessPortalSummary(req: Request, res: Response): P
         const to = typeof req.query.to === "string" ? req.query.to : undefined;
         const summaryResp = await getHubOrdersSummary(ctx.hubId, from, to, businessId);
         const summary = summaryResp?.data || { totalOrders: 0, totalSales: 0, byStatus: [], topProducts: [] };
+        const hubDoc: any = await hubModel.findById(ctx.hubId).select("fulfillment").lean();
 
         return res.status(200).json({
             status: true,
@@ -204,6 +205,9 @@ export async function getMyBusinessPortalSummary(req: Request, res: Response): P
                     store_link: business.store_link,
                     image_url: business.image_url,
                     operationalStatus: business.operationalStatus || "active",
+                    estimated_delivery_minutes: business.delivery_options?.estimated_delivery_minutes ?? null,
+                    // El hub decide si cada negocio edita su tiempo estimado desde el portal.
+                    canEditEta: hubDoc?.fulfillment?.businessesEditEta === true,
                 },
                 summary,
             },

@@ -210,7 +210,7 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
                     // fulfillment: claves conocidas; booleanos, fee número >= 0,
                     // pricingMode enum y distance {números >= 0, max null|>0} por dot-path.
                     if (field === "fulfillment") {
-                        if (!["deliveryEnabled", "pickupEnabled", "deliveryFee", "pricingMode", "distance"].includes(key)) continue;
+                        if (!["deliveryEnabled", "pickupEnabled", "deliveryFee", "pricingMode", "distance", "cashOnDelivery", "businessesEditEta"].includes(key)) continue;
                         if (key === "deliveryFee") {
                             if (typeof inner !== "number" || !Number.isFinite(inner) || inner < 0) continue;
                         } else if (key === "pricingMode") {

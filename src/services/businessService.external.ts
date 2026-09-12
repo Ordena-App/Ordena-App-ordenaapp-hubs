@@ -51,6 +51,8 @@ export interface HubFulfillmentPayload {
     deliveryFee: number;
     pricingMode: "flat" | "distance";
     distance: { base_fee: number; included_km: number; price_per_km: number; max_distance_km: number | null };
+    /** Efectivo contra entrega → payment_methods.cash de cada negocio. */
+    cashOnDelivery: boolean;
 }
 
 /**
@@ -71,6 +73,7 @@ export function buildHubFulfillmentPayload(raw: any): HubFulfillmentPayload {
             price_per_km: num(raw?.distance?.price_per_km, 0),
             max_distance_km: typeof maxRaw === "number" && Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : null,
         },
+        cashOnDelivery: raw?.cashOnDelivery !== false,
     };
 }
 

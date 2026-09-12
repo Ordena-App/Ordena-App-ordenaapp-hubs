@@ -183,6 +183,7 @@ function updateMyHubOrderStatus(req, res) {
  */
 function getMyBusinessPortalSummary(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c;
         const ctx = req.hubContext;
         try {
             const requested = typeof req.query.businessId === "string" ? req.query.businessId : undefined;
@@ -201,6 +202,7 @@ function getMyBusinessPortalSummary(req, res) {
             const to = typeof req.query.to === "string" ? req.query.to : undefined;
             const summaryResp = yield (0, ordersService_external_1.getHubOrdersSummary)(ctx.hubId, from, to, businessId);
             const summary = (summaryResp === null || summaryResp === void 0 ? void 0 : summaryResp.data) || { totalOrders: 0, totalSales: 0, byStatus: [], topProducts: [] };
+            const hubDoc = yield hubModel_1.default.findById(ctx.hubId).select("fulfillment").lean();
             return res.status(200).json({
                 status: true,
                 statusCode: 200,
@@ -214,6 +216,9 @@ function getMyBusinessPortalSummary(req, res) {
                         store_link: business.store_link,
                         image_url: business.image_url,
                         operationalStatus: business.operationalStatus || "active",
+                        estimated_delivery_minutes: (_b = (_a = business.delivery_options) === null || _a === void 0 ? void 0 : _a.estimated_delivery_minutes) !== null && _b !== void 0 ? _b : null,
+                        // El hub decide si cada negocio edita su tiempo estimado desde el portal.
+                        canEditEta: ((_c = hubDoc === null || hubDoc === void 0 ? void 0 : hubDoc.fulfillment) === null || _c === void 0 ? void 0 : _c.businessesEditEta) === true,
                     },
                     summary,
                 },

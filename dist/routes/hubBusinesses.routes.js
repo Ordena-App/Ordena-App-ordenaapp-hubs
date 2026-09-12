@@ -43,4 +43,6 @@ router.patch("/me/businesses/:businessId/hours", auth_1.verifyHubJWT, (0, auth_1
 router.get("/me/businesses", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubBusinesses_controller_1.getMyHubBusinesses);
 router.post("/me/businesses", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN"), hubBusinesses_controller_1.createBusinessForMyHub);
 router.patch("/me/businesses/:businessId/operational-status", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), hubBusinesses_controller_1.updateBusinessOperationalStatus);
+// Portal del negocio: tiempo estimado de entrega (solo si el hub lo permite).
+router.patch("/me/portal/business/eta", auth_1.verifyHubJWT, (0, auth_1.requireHubRole)("BUSINESS_VIEWER"), hubBusinesses_controller_1.updateMyPortalBusinessEta);
 exports.default = router;

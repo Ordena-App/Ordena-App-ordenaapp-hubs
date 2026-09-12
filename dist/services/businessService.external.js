@@ -68,6 +68,7 @@ function buildHubFulfillmentPayload(raw) {
             price_per_km: num((_d = raw === null || raw === void 0 ? void 0 : raw.distance) === null || _d === void 0 ? void 0 : _d.price_per_km, 0),
             max_distance_km: typeof maxRaw === "number" && Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : null,
         },
+        cashOnDelivery: (raw === null || raw === void 0 ? void 0 : raw.cashOnDelivery) !== false,
     };
 }
 function createHubBusiness(payload) {

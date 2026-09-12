@@ -132,6 +132,12 @@ const hubSchema = new Schema({
         //   'distance' → base + precio/km desde la ubicación de cada negocio
         //                hasta el pin del cliente (ruta real con fallback).
         pricingMode: { type: String, enum: ["flat", "distance"], default: "flat" },
+        // Efectivo contra entrega en el checkout de todos los negocios
+        // (se propaga a payment_methods.cash; la pantalla de pago lo exige).
+        cashOnDelivery: { type: Boolean, default: true },
+        // Si cada negocio puede fijar su tiempo estimado de entrega desde su
+        // portal. Apagado = lo pone el hub por negocio (Negocios → Información).
+        businessesEditEta: { type: Boolean, default: false },
         distance: {
             base_fee: { type: Number, default: 0 },
             included_km: { type: Number, default: 0 },
@@ -252,6 +258,8 @@ export interface IHub extends Document {
         pickupEnabled?: boolean;
         deliveryFee?: number;
         pricingMode?: "flat" | "distance";
+        cashOnDelivery?: boolean;
+        businessesEditEta?: boolean;
         distance?: {
             base_fee?: number;
             included_km?: number;
