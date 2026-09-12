@@ -8,7 +8,9 @@ import {
     getBusinessSettingsExternal,
     patchBusinessWeeklyHours,
     uploadBusinessLogoExternal,
-    buildHubFulfillmentPayload,, buildHubPaymentFlowPayload } from "../services/businessService.external";
+    buildHubFulfillmentPayload,
+    buildHubPaymentFlowPayload,
+} from "../services/businessService.external";
 
 // Traduce fallos del upstream (business-service) a respuestas claras.
 // Mientras el contrato F1 no esté desplegado allá, los 404 upstream se
