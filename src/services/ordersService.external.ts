@@ -16,6 +16,8 @@ export interface HubOrdersQuery {
     status?: string;
     from?: string;
     to?: string;
+    /** Número visible (#1042), ID completo o fragmento final del _id. */
+    q?: string;
 }
 
 export async function getHubOrders(hubId: string, query: HubOrdersQuery) {

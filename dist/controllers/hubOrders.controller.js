@@ -121,6 +121,8 @@ function getMyHubOrders(req, res) {
                 status: typeof req.query.status === "string" ? req.query.status : undefined,
                 from: typeof req.query.from === "string" ? req.query.from : undefined,
                 to: typeof req.query.to === "string" ? req.query.to : undefined,
+                // Búsqueda por número visible o ID del pedido.
+                q: typeof req.query.q === "string" && req.query.q.trim() ? req.query.q.trim() : undefined,
             });
             // El Portal Business solo recibe los datos del cliente que el hub decide
             // compartir. Los roles del hub ven todo (son los dueños de la operación).

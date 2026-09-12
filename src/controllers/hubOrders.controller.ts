@@ -107,6 +107,8 @@ export async function getMyHubOrders(req: Request, res: Response): Promise<Respo
             status: typeof req.query.status === "string" ? req.query.status : undefined,
             from: typeof req.query.from === "string" ? req.query.from : undefined,
             to: typeof req.query.to === "string" ? req.query.to : undefined,
+            // Búsqueda por número visible o ID del pedido.
+            q: typeof req.query.q === "string" && req.query.q.trim() ? req.query.q.trim() : undefined,
         });
 
         // El Portal Business solo recibe los datos del cliente que el hub decide
