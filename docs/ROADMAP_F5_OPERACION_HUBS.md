@@ -37,7 +37,7 @@ Chicos, visibles y sin riesgo. Se hacen los tres juntos y salen en un solo deplo
 
 **Aceptación:** abrir `michael-hub.staging.ordena.app`, el hub-admin y el portal del negocio: pestaña con logo y nombre del hub en los tres.
 
-### 1.2 ID del pedido consistente
+### 1.2 ID del pedido consistente — ✅ hecho (la búsqueda por número/ID del listado se añadió el 2026-09-11)
 - Regla única en hub-admin, portal del negocio, dashboard SaaS del negocio hub y ticket: **número visible = `orderNumber`** (ej. `#1042`); si un pedido viejo no lo tiene, últimos 8 caracteres del `_id`.
 - En el detalle (drawer del hub, detalle del negocio, ticket) se muestra además el **ID completo** con botón "Copiar".
 - Búsqueda por número o por ID completo en el listado del hub-admin.
