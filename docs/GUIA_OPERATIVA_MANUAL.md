@@ -617,6 +617,15 @@ staging a producción (en orden):
     checkout entrando por el directorio del hub.
 15. ☐ Crear en Meta la plantilla del §6.6 (aviso al cliente) para que esté aprobada al
     llegar al Sprint 4.
+16. ☐ Sprint 2 (comprobante de pago): deployar **products** (nuevo endpoint interno de
+    subida), **orders** (correr `npm install`: nueva dependencia `multer`), gateway,
+    business, hubs y frontend. `PRODUCTS_SERVICE_LINK` en orders es opcional (por
+    defecto `http://localhost:3004/api`, que es donde corre products en cada host);
+    products y orders ya comparten `INTERNAL_HUBS_SECRET`. Luego, en el hub: Ajustes →
+    “Pagos con comprobante” → Guardar una vez (propaga a los negocios existentes; los
+    nuevos nacen con la config). Smoke: pagar un pedido con Yape en un negocio del hub,
+    adjuntar una captura, y verla en el drawer del hub, en el portal del negocio, en el
+    detalle del dashboard y en el ticket.
 
 ---
 
