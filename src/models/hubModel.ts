@@ -146,6 +146,15 @@ const hubSchema = new Schema({
         },
     },
 
+    // Comprobante de pago en métodos manuales (Yape, transferencia…) de TODOS
+    // sus negocios: si la pantalla de pago pide adjuntarlo y a quién va el aviso
+    // de WhatsApp después ('hub' = número del hub, 'business' = el del negocio,
+    // 'none' = sin aviso). Se propaga a payment_proof de cada negocio.
+    paymentFlow: {
+        requireProof: { type: Boolean, default: true },
+        notifyTarget: { type: String, enum: ["hub", "business", "none"], default: "hub" },
+    },
+
     // Zona horaria del hub: cálculos de apertura, estadísticas y rotación de
     // métricas la respetan. Cada Business mantiene además su propio horario.
     timezone: { type: String, default: "America/El_Salvador" },
@@ -253,6 +262,7 @@ export interface IHub extends Document {
         city?: string | null;
     };
     /** Métodos de entrega del checkout de sus negocios + tarifa plana de delivery. */
+    paymentFlow?: { requireProof?: boolean; notifyTarget?: "hub" | "business" | "none" };
     fulfillment?: {
         deliveryEnabled?: boolean;
         pickupEnabled?: boolean;

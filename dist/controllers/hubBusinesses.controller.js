@@ -132,7 +132,9 @@ function createBusinessForMyHub(req, res) {
                 : {})), { 
                 // Métodos de entrega del hub: el checkout nace ofreciendo lo que el
                 // operador decidió (default: delivery + recogida, tarifa 0).
-                fulfillment: (0, businessService_external_1.buildHubFulfillmentPayload)(hub.fulfillment) }));
+                fulfillment: (0, businessService_external_1.buildHubFulfillmentPayload)(hub.fulfillment), 
+                // Comprobante de pago y destinatario del aviso según el hub.
+                payment_flow: (0, businessService_external_1.buildHubPaymentFlowPayload)(hub) }));
             yield hubModel_1.default.updateOne({ _id: ctx.hubId }, { $inc: { "usageMetrics.businessesCount": 1 }, $set: { updated_at: new Date() } });
             return res.status(201).json({
                 status: true,

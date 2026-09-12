@@ -12,6 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.buildHubPaymentFlowPayload = buildHubPaymentFlowPayload;
 exports.buildHubFulfillmentPayload = buildHubFulfillmentPayload;
 exports.createHubBusiness = createHubBusiness;
 exports.getBusinessesByHubId = getBusinessesByHubId;
@@ -24,6 +25,7 @@ exports.uploadBusinessLogoExternal = uploadBusinessLogoExternal;
 exports.propagateHubStorefrontThemeExternal = propagateHubStorefrontThemeExternal;
 exports.propagateHubDeliveryDefaultsExternal = propagateHubDeliveryDefaultsExternal;
 exports.propagateHubFulfillmentExternal = propagateHubFulfillmentExternal;
+exports.propagateHubPaymentFlowExternal = propagateHubPaymentFlowExternal;
 exports.propagateHubRegionCountryExternal = propagateHubRegionCountryExternal;
 exports.addHubDomainExternal = addHubDomainExternal;
 exports.hubDomainStatusExternal = hubDomainStatusExternal;
@@ -48,6 +50,17 @@ const config_1 = require("../config/config");
 // ============================================================================
 function internalHeaders(extra) {
     return Object.assign(Object.assign({}, (config_1.INTERNAL_SHARED_SECRET ? { "x-ordena-secret": config_1.INTERNAL_SHARED_SECRET } : {})), (extra || {}));
+}
+/** hub.paymentFlow + hub.contact.whatsapp → payload de business (siembra y propagación). */
+function buildHubPaymentFlowPayload(hub) {
+    var _a, _b, _c;
+    const target = ["hub", "business", "none"].includes((_a = hub === null || hub === void 0 ? void 0 : hub.paymentFlow) === null || _a === void 0 ? void 0 : _a.notifyTarget) ? hub.paymentFlow.notifyTarget : "hub";
+    const digits = String(((_b = hub === null || hub === void 0 ? void 0 : hub.contact) === null || _b === void 0 ? void 0 : _b.whatsapp) || "").replace(/\D/g, "");
+    return {
+        enabled: ((_c = hub === null || hub === void 0 ? void 0 : hub.paymentFlow) === null || _c === void 0 ? void 0 : _c.requireProof) !== false,
+        notify_target: target,
+        hub_whatsapp: digits.length >= 7 ? digits : null,
+    };
 }
 /**
  * Normaliza hub.fulfillment al payload que entiende business-service (siembra
@@ -172,6 +185,13 @@ function propagateHubDeliveryDefaultsExternal(hubId, body) {
 function propagateHubFulfillmentExternal(hubId, body) {
     return __awaiter(this, void 0, void 0, function* () {
         const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/fulfillment`, body, { timeout: 20000, headers: internalHeaders() });
+        return data;
+    });
+}
+/** Propaga el flujo de comprobante de pago del hub a payment_proof de TODOS sus negocios. */
+function propagateHubPaymentFlowExternal(hubId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.patch(`${config_1.BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/payment-flow`, body, { timeout: 20000, headers: internalHeaders() });
         return data;
     });
 }

@@ -8,8 +8,7 @@ import {
     getBusinessSettingsExternal,
     patchBusinessWeeklyHours,
     uploadBusinessLogoExternal,
-    buildHubFulfillmentPayload,
-} from "../services/businessService.external";
+    buildHubFulfillmentPayload,, buildHubPaymentFlowPayload } from "../services/businessService.external";
 
 // Traduce fallos del upstream (business-service) a respuestas claras.
 // Mientras el contrato F1 no esté desplegado allá, los 404 upstream se
@@ -135,6 +134,8 @@ export async function createBusinessForMyHub(req: Request, res: Response): Promi
             // Métodos de entrega del hub: el checkout nace ofreciendo lo que el
             // operador decidió (default: delivery + recogida, tarifa 0).
             fulfillment: buildHubFulfillmentPayload(hub.fulfillment),
+            // Comprobante de pago y destinatario del aviso según el hub.
+            payment_flow: buildHubPaymentFlowPayload(hub),
         });
 
         await hubModel.updateOne(

@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import hubModel from "../models/hubModel";
 import hubCategoryModel from "../models/hubCategoryModel";
 import { INTERNAL_SHARED_SECRET } from "../config/config";
-import { propagateHubStorefrontThemeExternal, propagateHubDeliveryDefaultsExternal, propagateHubFulfillmentExternal, propagateHubRegionCountryExternal, buildHubFulfillmentPayload } from "../services/businessService.external";
+import { propagateHubStorefrontThemeExternal, propagateHubDeliveryDefaultsExternal, propagateHubFulfillmentExternal, propagateHubRegionCountryExternal, buildHubFulfillmentPayload, propagateHubPaymentFlowExternal, buildHubPaymentFlowPayload } from "../services/businessService.external";
 
 /**
  * GET /api/hubs/resolve?slug=oe-ya
@@ -174,6 +174,7 @@ const UPDATABLE_FIELDS = [
     "businessVisibility",
     "deliveryDefaults",
     "fulfillment",
+    "paymentFlow",
     // País de operación (nombre, ej. "El Salvador"). Cambiarlo dispara la
     // propagación de region_settings.country a todos los negocios del hub.
     "country",
@@ -186,7 +187,7 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
         // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
         // claves ya no borra las demás (antes el $set del objeto entero se
         // llevaba por delante deliveryWhatsapp, email, tiktok…).
-        const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment"]);
+        const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment", "paymentFlow"]);
         // HUB_STAFF solo administra la operación: métodos/tarifa de entrega, zona por
         // defecto y la matriz de visibilidad. Identidad, marca, contacto, país y
         // liquidaciones son de dueño/admin; lo demás que mande se ignora.
@@ -228,6 +229,15 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
                             }
                             continue;
                         } else if (typeof inner !== "boolean") {
+                            continue;
+                        }
+                    }
+                    if (field === "paymentFlow") {
+                        if (key === "requireProof") {
+                            if (typeof inner !== "boolean") continue;
+                        } else if (key === "notifyTarget") {
+                            if (inner !== "hub" && inner !== "business" && inner !== "none") continue;
+                        } else {
                             continue;
                         }
                     }
@@ -325,6 +335,20 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
             } catch (propagateError) {
                 console.error(
                     "No se pudo propagar el país a los negocios del hub:",
+                    propagateError instanceof Error ? propagateError.message : propagateError
+                );
+            }
+        }
+
+        // Comprobante de pago: cambia con paymentFlow o con el WhatsApp del hub (es el
+        // número al que va el aviso cuando notifyTarget = 'hub'). Best-effort.
+        const paymentFlowTouched = Object.keys(patch).some((k) => k.startsWith("paymentFlow.") || k === "contact.whatsapp");
+        if (paymentFlowTouched && hub) {
+            try {
+                await propagateHubPaymentFlowExternal(String(ctx.hubId), buildHubPaymentFlowPayload(hub));
+            } catch (propagateError) {
+                console.error(
+                    "No se pudo propagar el flujo de comprobante a los negocios del hub:",
                     propagateError instanceof Error ? propagateError.message : propagateError
                 );
             }
