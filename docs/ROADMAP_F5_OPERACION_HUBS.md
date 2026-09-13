@@ -95,7 +95,7 @@ Alcance completo, como pidió Noe:
 
 ---
 
-## 3. Sprint 2 — semanas 4 a 6: Bolsa de pedidos para repartidores
+## 3. Sprint 2 — semanas 4 a 6: Bolsa de pedidos para repartidores — ✅ hecho 2026-09-12 como Sprint 3 (ver §8 y §11.2; app en `/hub-driver`, guía §4e)
 
 Es el cambio que más ordena la operación y el que resuelve la privacidad hacia el motorizado sin plantillas de WhatsApp.
 
@@ -178,7 +178,7 @@ Por qué así:
 | 2–3 | Liquidaciones configurables; ticket térmico; catálogo autogestionado A y B. | ✅ |
 | 4 | **Sprint 1.5 — arreglos de la 2.ª reunión:** carrito vacío en el checkout del hub, efectivo contra entrega, opciones a $0 sin "0" pegado, tiempo estimado por negocio (lo edita el hub o, si el hub lo permite, cada negocio desde su portal; en SaaS/WL el dueño). | ✅ 2026-09-11 |
 | 5 | **Sprint 2 — Pagos manuales con comprobante:** el cliente adjunta el comprobante y "Confirma pago"; el comprobante se ve en el detalle del pedido (hub, negocio, dashboard con link al pedido, ticket); destinatario del aviso configurable (hub, negocio o sin aviso); efectivo contra entrega a nivel hub propagado. Aplica también a SaaS y WL (con aviso al negocio; el toggle para apagarlo en el dashboard SaaS queda pendiente). | ✅ 2026-09-11 |
-| 6–8 | **Sprint 3 — Flujo del pedido y bolsa de repartidores:** confirmación del hub (configurable), estados del negocio y de entrega, bolsa con "Tomar pedido", asignación manual por el hub, app móvil del repartidor (acceso con email y contraseña), privacidad hacia el motorizado. | |
+| 6–8 | **Sprint 3 — Flujo del pedido y bolsa de repartidores:** confirmación del hub (configurable), estados del negocio y de entrega, bolsa con "Tomar pedido", asignación manual por el hub, app móvil del repartidor (acceso con email y contraseña), privacidad hacia el motorizado. | ✅ 2026-09-12 (guía §4e). Pendiente: probar con Oe Ya en la calle; push en la app queda para después. |
 | 9 | **Sprint 4 — Avisos al cliente por WhatsApp:** plantilla de pedido confirmado con tiempo estimado por negocio (pedir a Meta desde ya). | |
 | 10–11 | **Sprint 5 — Liquidación de repartidores:** comisión global o por repartidor, cobros que retiene (efectivo/Yape), bonos y ajustes, cortes diario/semanal/quincenal/mensual, dashboard del repartidor. | |
 | 12–13 | Envío A→B (entra a la bolsa). | |
@@ -195,8 +195,8 @@ Por qué así:
 1. ✅ Orden de sprints aprobado (2026-09-09). Sprint 0 en curso.
 2. ✅ Precio: Hub $249 / Hub Pro $399 / Empresarial desde $699; anual con 1.5 meses gratis; Oe Ya con gracia de 3 meses y precio fundador $149 (§7).
 3. ✅ Liquidaciones: semana de lunes a domingo; quincena 1–15 y 16–fin de mes.
-4. Bolsa: acceso del repartidor (teléfono+PIN o email+contraseña) y si el hub puede asignar a mano además de la bolsa.
-5. Repartidor: teléfono del cliente apagado por defecto (propuesta) o encendido.
+4. ✅ Bolsa: acceso del repartidor con email+contraseña; el hub sí asigna a mano además de la bolsa (cerrado 2026-09-11, hecho 2026-09-12).
+5. ✅ Repartidor: teléfono del cliente apagado por defecto, configurable por hub en Ajustes → “Qué ve el repartidor” (hecho 2026-09-12).
 
 ---
 

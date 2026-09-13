@@ -251,6 +251,48 @@ ticket web). Botones en el ticket web, en el detalle del pedido del dashboard, e
 del hub-admin y en el portal del negocio. Probar en una impresora real de 58 y otra de 80
 antes de darlo por cerrado (pedir modelo a Oe Ya).
 
+## 4e. Flujo del pedido y bolsa de repartidores (Sprint 3)
+
+Sin variables nuevas ni migraciones: los campos nuevos del pedido (`hub_confirmation`,
+`delivery_assignment`) nacen con el pedido y los índices los crea mongoose al arrancar
+orders. Orden de deploy: **orders → hubs → frontend**.
+
+**Interruptores del hub (Ajustes):**
+
+| Sección | Interruptor | Qué hace | Default |
+|---|---|---|---|
+| Flujo del pedido | El hub confirma los pedidos antes de pasarlos al negocio | El pedido nace “por confirmar”: solo lo ve el hub-admin, el negocio no lo ve en su portal ni recibe `pedido_negocio_hub_es` hasta que el hub lo confirma. Rechazar cancela el pedido y devuelve stock y cupón. | apagado |
+| Flujo del pedido | Publicar para repartidores al confirmar | Al confirmar, los pedidos de delivery entran solos a la bolsa (desmarcable pedido a pedido). | encendido |
+| Qué ve el repartidor | Nombre / Teléfono del cliente | Dirección, referencia y pin van siempre; el teléfono va apagado por defecto. | nombre sí, teléfono no |
+
+`hub.orderFlow` lo lee orders vía `notification-config` con caché de **60 s**: encender o
+apagar la confirmación tarda hasta un minuto en aplicar a pedidos nuevos.
+
+**Repartidores:** Usuarios → Nuevo usuario → rol **Repartidor** (email, contraseña y
+teléfono opcional). Entran en **`/hub-driver`** con el mismo login del hub
+(`{slug}.ordena.app/hub-admin/login` o `ordena.app/hub-admin/login`); cada rol se
+redirige solo a su app. La app muestra Disponibles (bolsa), Mis pedidos y Entregados, se
+refresca sola cada 15 s y abre Google Maps / Waze en el pin exacto del cliente. No usa
+WhatsApp ni plantillas de Meta. Conviene que el repartidor la agregue a la pantalla de
+inicio del celular.
+
+**Máquina de estados** (`order.delivery_assignment.status`): `none → published →
+assigned → picked_up → on_the_way → delivered`, con `incident` como marca lateral (se
+retoma con el siguiente estado) y `cancelled` al rechazar. La toma desde la bolsa es un
+`findOneAndUpdate` condicionado a `published`: el segundo repartidor recibe 409
+`already_taken`. El hub puede asignar a mano, reasignar, quitar y republicar, o marcar
+recogido / en camino / entregado él mismo. `order_status` se espeja (`Recogido`,
+`En camino`, `Entregado`) para que ticket, negocio y cliente sigan viendo el avance.
+Cada cambio queda en `delivery_assignment.history` (base de los informes y de la
+liquidación de repartidores del Sprint 5).
+
+**El negocio** (portal) solo maneja *En preparación* y *Listo para recoger*; ve
+“Repartidor: nombre · estado” pero no la auditoría, y nunca ve pedidos por confirmar.
+
+**El botón “Notificar a repartidor” por WhatsApp** (plantilla `pedido_repartidor_es`)
+sigue disponible como opción secundaria en el drawer solo si el hub tiene ese número en
+Contacto → “WhatsApp del repartidor”; con la bolsa ya no hace falta.
+
 ---
 
 ## 5. Stripe (paso a paso)
@@ -617,6 +659,15 @@ staging a producción (en orden):
     checkout entrando por el directorio del hub.
 15. ☐ Crear en Meta la plantilla del §6.6 (aviso al cliente) para que esté aprobada al
     llegar al Sprint 4.
+17. ☐ Sprint 3 (flujo + bolsa): deployar **orders → hubs → frontend** (sin envs ni
+    migraciones, §4e). En el hub: Usuarios → crear un repartidor; Ajustes → “Flujo del
+    pedido” (encender la confirmación solo si el hub lo quiere) y “Qué ve el repartidor”
+    → Guardar. Smoke: hacer un pedido de delivery → (si confirma) aparece el banner “N
+    pedidos esperan tu confirmación” y el portal del negocio NO lo lista → Confirmar con
+    “Publicar” marcado → en el celular, `/hub-driver` lo muestra en Disponibles → Tomar
+    pedido (desde un segundo repartidor debe salir “Otro repartidor ya tomó este pedido”)
+    → Recogí / En camino / Entregado → el drawer del hub y el portal muestran repartidor
+    y tiempos; `order_status` termina en `Entregado`.
 16. ☐ Sprint 2 (comprobante de pago): deployar **products** (nuevo endpoint interno de
     subida), **orders** (correr `npm install`: nueva dependencia `multer`), gateway,
     business, hubs y frontend. `PRODUCTS_SERVICE_LINK` en orders es opcional (por
