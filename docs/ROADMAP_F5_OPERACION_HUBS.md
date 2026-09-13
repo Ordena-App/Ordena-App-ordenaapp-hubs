@@ -179,7 +179,7 @@ Por qué así:
 | 4 | **Sprint 1.5 — arreglos de la 2.ª reunión:** carrito vacío en el checkout del hub, efectivo contra entrega, opciones a $0 sin "0" pegado, tiempo estimado por negocio (lo edita el hub o, si el hub lo permite, cada negocio desde su portal; en SaaS/WL el dueño). | ✅ 2026-09-11 |
 | 5 | **Sprint 2 — Pagos manuales con comprobante:** el cliente adjunta el comprobante y "Confirma pago"; el comprobante se ve en el detalle del pedido (hub, negocio, dashboard con link al pedido, ticket); destinatario del aviso configurable (hub, negocio o sin aviso); efectivo contra entrega a nivel hub propagado. Aplica también a SaaS y WL (con aviso al negocio; el toggle para apagarlo en el dashboard SaaS queda pendiente). | ✅ 2026-09-11 |
 | 6–8 | **Sprint 3 — Flujo del pedido y bolsa de repartidores:** confirmación del hub (configurable), estados del negocio y de entrega, bolsa con "Tomar pedido", asignación manual por el hub, app móvil del repartidor (acceso con email y contraseña), privacidad hacia el motorizado. | ✅ 2026-09-12 (guía §4e). Pendiente: probar con Oe Ya en la calle; push en la app queda para después. |
-| 9 | **Sprint 4 — Avisos al cliente por WhatsApp:** plantilla de pedido confirmado con tiempo estimado por negocio (pedir a Meta desde ya). | |
+| 9 | **Sprint 4 — Avisos al cliente por WhatsApp:** plantilla de pedido confirmado con tiempo estimado por negocio (pedir a Meta desde ya). | ✅ 2026-09-12 (guía §6.6); falta la aprobación de Meta |
 | 10–11 | **Sprint 5 — Liquidación de repartidores:** comisión global o por repartidor, cobros que retiene (efectivo/Yape), bonos y ajustes, cortes diario/semanal/quincenal/mensual, dashboard del repartidor. | |
 | 12–13 | Envío A→B (entra a la bolsa). | |
 | 14–16 | Solicitud de compra. | |
@@ -240,6 +240,8 @@ Hoy el cliente no recibe ningún mensaje del pedido. Se agrega **un solo mensaje
 - Es plantilla de Meta (el cliente no ha escrito al número del bot, así que no cabe mensaje libre). **Hay que pedirla esta semana** para tenerla aprobada al llegar al Sprint 4. Una sola plantilla sirve para hubs, SaaS y WL.
 - **Interruptor por hub:** avisar al cliente sí/no; texto del tiempo por negocio; número que firma el mensaje (el del bot).
 - Costo real: un mensaje de utilidad de Meta por pedido (centavos). Está considerado en el precio, ver §11.7.
+
+Hecho 2026-09-12: ver guía §6.6 (plantilla, variables, disparos, interruptores y envío único; solo falta la aprobación de Meta).
 
 ### 11.5 Liquidación de repartidores y su dashboard (Sprint 5, 1.5–2 semanas)
 

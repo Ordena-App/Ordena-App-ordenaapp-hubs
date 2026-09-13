@@ -160,9 +160,14 @@ const hubSchema = new Schema({
     // reciba su WhatsApp (apagado = flujo directo, como SaaS/WL).
     // autoPublishOnConfirm: al confirmar, el pedido de delivery entra solo a la
     // bolsa de repartidores (el hub puede desmarcarlo pedido a pedido).
+    // notifyCustomerOnConfirm (Sprint 4): aviso al cliente por WhatsApp con el
+    // tiempo estimado del negocio al confirmar el pedido (plantilla
+    // pedido_confirmado_cliente_es). Se propaga a orders vía notification-config.
+    // Costo por mensaje de Meta considerado en el plan; default encendido.
     orderFlow: {
         hubConfirms: { type: Boolean, default: false },
         autoPublishOnConfirm: { type: Boolean, default: true },
+        notifyCustomerOnConfirm: { type: Boolean, default: true },
     },
     // Qué datos del cliente ve el REPARTIDOR en su app. Dirección, referencia y
     // pin van siempre (los necesita para entregar); el teléfono va apagado por
@@ -280,8 +285,8 @@ export interface IHub extends Document {
     };
     /** Métodos de entrega del checkout de sus negocios + tarifa plana de delivery. */
     paymentFlow?: { requireProof?: boolean; notifyTarget?: "hub" | "business" | "none" };
-    /** Flujo del pedido: confirmación del hub y publicación automática en la bolsa. */
-    orderFlow?: { hubConfirms?: boolean; autoPublishOnConfirm?: boolean };
+    /** Flujo del pedido: confirmación del hub, publicación automática en la bolsa y aviso al cliente al confirmar. */
+    orderFlow?: { hubConfirms?: boolean; autoPublishOnConfirm?: boolean; notifyCustomerOnConfirm?: boolean };
     /** Qué datos del cliente ve el repartidor (dirección, referencia y pin siempre). */
     driverVisibility?: { customerName?: boolean; customerPhone?: boolean };
     fulfillment?: {

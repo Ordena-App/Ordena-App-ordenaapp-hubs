@@ -236,7 +236,7 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
                     }
                     // orderFlow / driverVisibility: solo sus claves y solo booleanos.
                     if (field === "orderFlow") {
-                        if (!["hubConfirms", "autoPublishOnConfirm"].includes(key) || typeof inner !== "boolean") continue;
+                        if (!["hubConfirms", "autoPublishOnConfirm", "notifyCustomerOnConfirm"].includes(key) || typeof inner !== "boolean") continue;
                     }
                     if (field === "driverVisibility") {
                         if (!["customerName", "customerPhone"].includes(key) || typeof inner !== "boolean") continue;
@@ -547,9 +547,12 @@ export async function getHubNotificationConfig(req: Request, res: Response): Pro
                 deliveryWhatsapp: hub.contact?.deliveryWhatsapp || null,
                 businessVisibility: hub.businessVisibility,
                 // Sprint 3: confirmación del hub (orders decide si el pedido nace pendiente)
+                // Sprint 4: aviso al cliente por WhatsApp al confirmar (default true;
+                // orders lo lee aquí antes de enviar pedido_confirmado_cliente_es)
                 orderFlow: {
                     hubConfirms: hub.orderFlow?.hubConfirms === true,
                     autoPublishOnConfirm: hub.orderFlow?.autoPublishOnConfirm !== false,
+                    notifyCustomerOnConfirm: hub.orderFlow?.notifyCustomerOnConfirm !== false,
                 },
                 driverVisibility: {
                     customerName: hub.driverVisibility?.customerName !== false,

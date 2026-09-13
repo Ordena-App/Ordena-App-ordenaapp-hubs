@@ -378,14 +378,14 @@ suscripción manual desde Stripe con `metadata.hubId`.
 
 ---
 
-## 6. Meta — 4 plantillas de WhatsApp
+## 6. Meta — 5 plantillas de WhatsApp
 
 **Antes de empezar:** despliega orders con el fix `90f4e5c` (§3). Con él, las
-4 plantillas usan la MISMA base de botón: **`https://ordena.app/{{1}}`**.
+Las 5 plantillas usan la MISMA base de botón: **`https://ordena.app/{{1}}`**.
 
 Dónde: **Meta Business Suite → WhatsApp Manager → Message templates → Create**,
 en la misma WABA donde ya viven `primer_pedido_es` / `limite_pedidos_es`.
-Las 4 son: **categoría Utility · idioma Español (es)** · sin header ni footer ·
+Las 5 son: **categoría Utility · idioma Español (es)** · sin header ni footer ·
 un botón de tipo **URL dinámica**. Meta pide un valor de ejemplo por variable —
 usa los de las tablas. Los nombres deben ser EXACTOS (si cambias alguno, setea
 la env `TEMPLATE_*` correspondiente en orders).
@@ -486,6 +486,7 @@ grep -n -B6 -A10 "1320" ~/.pm2/logs/Ordena-BOT-error.log | tail -80
 | `number of ... params does not match` (#132000) | Conteo de variables del body distinto al de la tabla del §6 | Corregir la plantilla en Meta |
 | Botón con `%7B%7B1%7D%7D` en la URL | Se escribieron las llaves a mano; Meta las guardó como texto | Insertar la variable con el chip `{{1}}` (debe leerse 24/2000) |
 | `template name does not exist` (#132001) | Nombre o idioma distinto (`es_MX` en vez de `es`) | Renombrar o setear la env `TEMPLATE_*` |
+| *(sin error de Meta)* el mensaje al cliente (`pedido_confirmado_cliente_es`, §6.6) no llega | Toggle apagado, teléfono con menos de 8 dígitos, pedido aún por confirmar, `CUSTOMER_NOTIFY_DISABLED=true`, o el bot falló | Revisar `customer_notified_at` en el pedido: si quedó `null`, el bot falló (o nunca se intentó) y se reintenta en la próxima confirmación; si tiene fecha, ya se envió (a `customer_notified_to`; buscar en `whatsapp_log` el `dedupeKey` `{orderId}:cliente`). Revisar el toggle correspondiente: hub → Ajustes → Flujo del pedido; SaaS/WL → Ajustes → WhatsApp (nace apagado) |
 
 Para verificar cómo quedó una plantilla de verdad (no la UI), desde la
 carpeta del bot con sus envs cargadas:
@@ -502,33 +503,103 @@ defaults del código. El anti-duplicado ya está en dos capas (dedupeKey del bot
 
 ---
 
-### 6.6 `pedido_confirmado_cliente_es` (aviso al cliente — Sprint 4, pedirla YA)
-Se envía UNA vez, cuando el pedido pasa a **confirmado** (por el hub si confirma pedidos,
-o por el negocio en SaaS/WL). Es el único mensaje que recibe el cliente final; no ha
-escrito al número del bot, así que no cabe mensaje libre: tiene que ser plantilla.
-Una sola plantilla sirve para hubs, SaaS y White Label. La firma el número del bot que ya
-envía las otras cuatro; no hace falta nada nuevo en Meta salvo crearla y esperar la aprobación.
+### 6.6 `pedido_confirmado_cliente_es` (aviso al cliente — Sprint 4)
+Se envía **UNA vez por pedido**, cuando el pedido pasa a **confirmado**. Es el único
+mensaje que recibe el cliente final; como no ha escrito al número del bot, no cabe
+mensaje libre: tiene que ser plantilla. Una sola plantilla sirve para hubs, SaaS y White
+Label, y la firma el mismo número del bot que envía las otras cuatro. En Meta solo hay que
+crearla y esperar la aprobación; el código ya está listo y calza con este texto.
 
 - **Nombre:** `pedido_confirmado_cliente_es` · **Categoría:** Utilidad · **Idioma:** Español (`es`)
+- **Env opcional en orders:** `TEMPLATE_CUSTOMER_CONFIRMED_ES` (default `pedido_confirmado_cliente_es`;
+  solo si en Meta la nombras distinto, §2).
+- **Kill switch:** `CUSTOMER_NOTIFY_DISABLED=true` en el .env de orders (y reiniciar orders)
+  apaga el aviso en TODOS los contextos (hubs, SaaS y WL) sin tocar ningún toggle.
 
-**Body:**
+**Body** (5 variables posicionales, pegar literal):
 ```
 ✅ ¡Hola {{1}}! Tu pedido #{{2}} en {{3}} está confirmado.
 
-Tiempo estimado de entrega: {{4}}.
+Tiempo estimado: {{4}}.
 {{5}}
 
 Puedes seguir tu pedido en el enlace.
 ```
-**Botón:** URL dinámica · texto `Ver mi pedido` · URL `https://ordena.app/{{1}}`
-(sufijo real: `{store_link}/ordenes/{orderId}`, igual que las demás).
+**Botón:** URL dinámica (índice 0) · texto `Ver mi pedido` · URL `https://ordena.app/{{1}}`
+(sufijo real: `{store_link}/ordenes/{orderId}`, igual que `pedido_repartidor_es`).
 **Ejemplos:** 1 `María` · 2 `1042` · 3 `Cafe Cena Fonseca` · 4 `35 a 40 minutos` ·
-5 `El repartidor se comunicará contigo cuando llegue a tu domicilio.`
-*(Cuando el negocio no tiene tiempo estimado, {{4}} llega como `lo antes posible`; en
-pedidos para recoger, {{5}} dice `Te avisaremos cuando esté listo para recoger.`)*
+5 `Te lo llevamos a la dirección indicada. Ten listo el pago de 45.00 (efectivo).`
+**Destinatario:** `order.customer_number` reducido a solo dígitos (se quitan `+`, espacios y
+guiones). Si quedan **menos de 8 dígitos no se envía** (el pedido queda con
+`customer_notified_at` en `null`).
 
-Cuando Meta la apruebe: el nombre por defecto que usará orders es ese; si la nombras
-distinto, `TEMPLATE_CUSTOMER_CONFIRMED_ES=<nombre>` en el .env de orders (§2).
+**Qué manda orders en cada variable** (ningún parámetro va vacío ni con saltos de línea —
+el bot además normaliza espacios/saltos con `toValidText`):
+
+| # | Variable | Regla | Ejemplo |
+|---|---|---|---|
+| 1 | Primer nombre del cliente | primera palabra de `order.customer_name`, recortada a 40 caracteres; sin nombre → `👋` | `María` |
+| 2 | Número de pedido | `order.orderNumber`; si no existe, últimos 6 del `_id` en mayúsculas | `1042` (o `A1B2C3`) |
+| 3 | Nombre del negocio | `businesses.name` | `Cafe Cena Fonseca` |
+| 4 | Tiempo estimado del **negocio** | `businesses.delivery_options.estimated_delivery_minutes {min,max}`: min y max válidos (>0) → `35 a 40 minutos`; solo max o solo min → `40 minutos`; ninguno → `lo antes posible` | `35 a 40 minutos` |
+| 5 | Línea de cierre según método y pago | una de las 4 variantes de la tabla siguiente | ver abajo |
+
+**Variantes de {{5}}.** *Método:* es **pickup** si `delivery_method` (en minúsculas) es o
+contiene uno de `self pick-up`, `self pickup`, `pickup`, `en tienda`, `in store`,
+`recoger en local`; si no, **delivery**. *Pagado:* si `payment_status` (en minúsculas) es
+uno de `paid`, `pagado`, `approved`, `aprobado`, `completed`. `{total}` =
+`order.total_amount` (o `order.order_total`); `{método de pago}` = `order.payment_type`
+→ `order.payment.payment_method` → `efectivo`.
+
+| Método | Pago | Texto de {{5}} |
+|---|---|---|
+| delivery | no pagado | `Te lo llevamos a la dirección indicada. Ten listo el pago de {total} ({método de pago}).` |
+| delivery | pagado | `Te lo llevamos a la dirección indicada. Tu pago ya está registrado.` |
+| pickup | no pagado | `Pásalo a recoger al local en el tiempo indicado. Pagas {total} ({método de pago}) al recibirlo.` |
+| pickup | pagado | `Pásalo a recoger al local en el tiempo indicado. Tu pago ya está registrado.` |
+
+**Cuándo se dispara** (siempre al pasar a confirmado, nunca antes):
+
+| Contexto | Disparo |
+|---|---|
+| Hub con “El hub confirma los pedidos” encendido | Cuando el hub **confirma** el pedido desde hub-admin (acción `confirm` del flujo del §4e). |
+| Hub sin confirmación y portal del negocio | Cuando el estado del pedido pasa a `Confirmado`/`Confirmed` por el PATCH interno de estado. |
+| SaaS / White Label | Cuando el negocio marca `Confirmed` desde su dashboard (`PATCH /orders/:id`, `changeOrderValues`) o cuando el pago con tarjeta deja el pedido en `Confirmed` (`markOrderPaidInternal`). |
+
+Nunca se envía mientras el pedido está pendiente de confirmación del hub
+(`order.hub_confirmation.status === 'pending'`).
+
+**Interruptores:**
+
+| Dónde | Interruptor | Default |
+|---|---|---|
+| Hub → **Ajustes → Flujo del pedido** | “Avisar al cliente por WhatsApp al confirmar” (`hub.orderFlow.notifyCustomerOnConfirm`; llega a orders vía `notification-config`, caché de 60 s como el resto del `orderFlow`) | **encendido** |
+| SaaS / WL → dashboard → **Ajustes → WhatsApp** | “Aviso al cliente al confirmar el pedido” (`business_settings.whatsapp.templatesByCategory.customer_confirmed.enabled`) | **apagado** (opt-in: cuesta un mensaje de Meta por pedido) |
+| Global (env de orders) | `CUSTOMER_NOTIFY_DISABLED=true` | no puesta |
+
+**Envío único por pedido** (mismo patrón que `delivery_notified_at` del aviso al repartidor):
+antes de llamar al bot, orders reserva el candado con un CAS
+`findOneAndUpdate({ _id, customer_notified_at: null }, { $set: { customer_notified_at, customer_notified_to } })`;
+si el bot falla, el candado vuelve a `null` y se reintenta en la próxima confirmación /
+cambio de estado. Segunda red: `dedupeKey` `{orderId}:cliente` en el bot (`whatsapp_log`).
+Un pedido con `customer_notified_at` con fecha ya no vuelve a avisar aunque se reconfirme.
+
+**Cómo cargarla en Meta Business (paso a paso):**
+
+| Paso | Dónde | Qué hacer |
+|---|---|---|
+| 1 | Meta Business Suite → WhatsApp Manager → **Plantillas de mensajes** (misma WABA de `primer_pedido_es`) | **Crear plantilla** |
+| 2 | Categoría | **Utilidad** (no Marketing) |
+| 3 | Nombre | `pedido_confirmado_cliente_es` — exacto, en minúsculas |
+| 4 | Idioma | **Español** (`es`; NO `es_MX` ni `es_ES`) |
+| 5 | Encabezado y pie de página | ninguno |
+| 6 | Cuerpo | pegar el body de arriba **literal** (5 variables, con los saltos de línea tal cual). Insertar cada variable con el chip `{{1}}`…`{{5}}`, no escribiendo las llaves a mano |
+| 7 | Botones | Añadir botón → **Visitar sitio web** → tipo de URL **Dinámica** → texto `Ver mi pedido` → URL `https://ordena.app/{{1}}` → ejemplo del sufijo: `cafe-cena-fonseca--ab12cd/ordenes/68f0a1b2c3d4e5f6a7b8c9d0` |
+| 8 | Ejemplos de variables (Meta los pide) | 1 `María` · 2 `1042` · 3 `Cafe Cena Fonseca` · 4 `35 a 40 minutos` · 5 `Te lo llevamos a la dirección indicada. Ten listo el pago de 45.00 (efectivo).` |
+| 9 | Enviar | **Enviar para revisión**. Al aprobarse, verificar con el curl del §6.5 (`name=pedido_confirmado_cliente_es`): debe decir `APPROVED`, `es`, `POSITIONAL` y botón `https://ordena.app/{{1}}` |
+
+Tras la aprobación no hay nada que configurar: el nombre coincide con el default del
+código. Si la nombraste distinto, `TEMPLATE_CUSTOMER_CONFIRMED_ES=<nombre>` en orders (§2).
 
 ---
 
@@ -677,6 +748,16 @@ staging a producción (en orden):
     nuevos nacen con la config). Smoke: pagar un pedido con Yape en un negocio del hub,
     adjuntar una captura, y verla en el drawer del hub, en el portal del negocio, en el
     detalle del dashboard y en el ticket.
+18. ☐ Sprint 4 (aviso al cliente): deployar **orders → hubs → business → frontend** (sin
+    migraciones; envs opcionales del §6.6). Confirmar que `pedido_confirmado_cliente_es`
+    está **APPROVED** en Meta (curl del §6.5). En el hub: Ajustes → “Flujo del pedido” →
+    verificar que “Avisar al cliente por WhatsApp al confirmar” está encendido (viene así
+    por defecto) → Guardar. Smoke: hacer un pedido en un negocio del hub poniendo **tu
+    propio número** como cliente → confirmar el pedido (o pasarlo a Confirmado si el hub
+    no confirma) → te llega el mensaje con el **tiempo estimado del negocio** y la línea
+    de pago correcta → un segundo intento de confirmación / cambio de estado **no
+    duplica** el mensaje (`customer_notified_at` ya tiene fecha). En SaaS/WL el toggle
+    nace apagado (Ajustes → WhatsApp): encenderlo solo en los negocios que lo pidan.
 
 ---
 

@@ -266,7 +266,7 @@ function updateMyHub(req, res) {
                         }
                         // orderFlow / driverVisibility: solo sus claves y solo booleanos.
                         if (field === "orderFlow") {
-                            if (!["hubConfirms", "autoPublishOnConfirm"].includes(key) || typeof inner !== "boolean")
+                            if (!["hubConfirms", "autoPublishOnConfirm", "notifyCustomerOnConfirm"].includes(key) || typeof inner !== "boolean")
                                 continue;
                         }
                         if (field === "driverVisibility") {
@@ -519,7 +519,7 @@ function incrementHubOrderUsage(req, res) {
  */
 function getHubNotificationConfig(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e, _f;
+        var _a, _b, _c, _d, _e, _f, _g;
         try {
             if (!isValidInternalCall(req)) {
                 return res.status(403).json({
@@ -550,13 +550,16 @@ function getHubNotificationConfig(req, res) {
                     deliveryWhatsapp: ((_b = hub.contact) === null || _b === void 0 ? void 0 : _b.deliveryWhatsapp) || null,
                     businessVisibility: hub.businessVisibility,
                     // Sprint 3: confirmación del hub (orders decide si el pedido nace pendiente)
+                    // Sprint 4: aviso al cliente por WhatsApp al confirmar (default true;
+                    // orders lo lee aquí antes de enviar pedido_confirmado_cliente_es)
                     orderFlow: {
                         hubConfirms: ((_c = hub.orderFlow) === null || _c === void 0 ? void 0 : _c.hubConfirms) === true,
                         autoPublishOnConfirm: ((_d = hub.orderFlow) === null || _d === void 0 ? void 0 : _d.autoPublishOnConfirm) !== false,
+                        notifyCustomerOnConfirm: ((_e = hub.orderFlow) === null || _e === void 0 ? void 0 : _e.notifyCustomerOnConfirm) !== false,
                     },
                     driverVisibility: {
-                        customerName: ((_e = hub.driverVisibility) === null || _e === void 0 ? void 0 : _e.customerName) !== false,
-                        customerPhone: ((_f = hub.driverVisibility) === null || _f === void 0 ? void 0 : _f.customerPhone) === true,
+                        customerName: ((_f = hub.driverVisibility) === null || _f === void 0 ? void 0 : _f.customerName) !== false,
+                        customerPhone: ((_g = hub.driverVisibility) === null || _g === void 0 ? void 0 : _g.customerPhone) === true,
                     },
                 },
             });
