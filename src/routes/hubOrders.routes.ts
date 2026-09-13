@@ -6,6 +6,19 @@ import {
     updateMyHubPaymentAccount,
     deleteMyHubPaymentAccount,
 } from "../controllers/hubPayments.controller";
+import {
+    confirmMyHubOrder,
+    rejectMyHubOrder,
+    publishMyHubOrder,
+    unpublishMyHubOrder,
+    assignMyHubOrder,
+    unassignMyHubOrder,
+    updateMyHubOrderDeliveryStatus,
+    getMyHubDrivers,
+    getMyDriverOrders,
+    claimMyDriverOrder,
+    updateMyDriverOrderStatus,
+} from "../controllers/hubOrderFlow.controller";
 import { verifyHubJWT, requireHubRole } from "../utils/auth";
 
 const router = Router();
@@ -39,6 +52,24 @@ router.patch(
     requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"),
     updateMyHubOrderStatus
 );
+
+// ── Sprint 3: flujo del pedido (confirmación del hub + bolsa de repartidores) ──
+// Solo roles de hub: el negocio no confirma ni asigna; el repartidor usa /me/driver/*.
+const HUB_OPS = requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF");
+router.post("/me/orders/:orderId/confirm", verifyHubJWT, HUB_OPS, confirmMyHubOrder);
+router.post("/me/orders/:orderId/reject", verifyHubJWT, HUB_OPS, rejectMyHubOrder);
+router.post("/me/orders/:orderId/publish", verifyHubJWT, HUB_OPS, publishMyHubOrder);
+router.post("/me/orders/:orderId/unpublish", verifyHubJWT, HUB_OPS, unpublishMyHubOrder);
+router.post("/me/orders/:orderId/assign", verifyHubJWT, HUB_OPS, assignMyHubOrder);
+router.post("/me/orders/:orderId/unassign", verifyHubJWT, HUB_OPS, unassignMyHubOrder);
+router.patch("/me/orders/:orderId/delivery-status", verifyHubJWT, HUB_OPS, updateMyHubOrderDeliveryStatus);
+router.get("/me/drivers", verifyHubJWT, HUB_OPS, getMyHubDrivers);
+
+// App del repartidor: bolsa, mis pedidos, tomar y avanzar la entrega de LOS SUYOS.
+const DRIVER = requireHubRole("DELIVERY_DRIVER");
+router.get("/me/driver/orders", verifyHubJWT, DRIVER, getMyDriverOrders);
+router.post("/me/driver/orders/:orderId/claim", verifyHubJWT, DRIVER, claimMyDriverOrder);
+router.patch("/me/driver/orders/:orderId/status", verifyHubJWT, DRIVER, updateMyDriverOrderStatus);
 
 // ── Métodos de pago centralizados del hub (solo administración) ──
 router.get(

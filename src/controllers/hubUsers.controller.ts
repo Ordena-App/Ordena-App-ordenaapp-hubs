@@ -156,7 +156,7 @@ export async function loginHubUser(req: Request, res: Response): Promise<Respons
         // WhatsApp del repartidor, y encima se cachea en su localStorage.
         const hubQuery = hubModel.findById(user.hub_id);
         const hub =
-            user.role === "BUSINESS_VIEWER"
+            user.role === "BUSINESS_VIEWER" || user.role === "DELIVERY_DRIVER"
                 ? await hubQuery.select("name slug logo favicon branding timezone country currency language status")
                 : await hubQuery;
         if (!hub || hub.status !== "ACTIVE") {
@@ -182,6 +182,7 @@ export async function loginHubUser(req: Request, res: Response): Promise<Respons
             email: user.email,
             role: user.role,
             business_id: user.business_id || null,
+            phone: (user as any).phone || null,
             permissions: { manageCatalog: (user as any).permissions?.manageCatalog === true },
         };
         return res.status(200).json({
@@ -210,6 +211,8 @@ export async function createHubUser(req: Request, res: Response): Promise<Respon
     try {
         const ctx = req.hubContext!;
         const { email, password, name, role, businessId } = req.body || {};
+        // Teléfono opcional (repartidores): solo dígitos y '+', acotado.
+        const phoneRaw = typeof req.body?.phone === "string" ? req.body.phone.replace(/[^\d+]/g, "").slice(0, 20) : "";
 
         const hubForLock: any = await hubModel.findById(ctx.hubId).select("subscription.pastDueSince").lean();
         // Mora >= 15 días: se bloquea SOLO crear (negocios/usuarios) — la
@@ -224,12 +227,12 @@ export async function createHubUser(req: Request, res: Response): Promise<Respon
             });
         }
 
-        const allowedRoles: HubUserRole[] = ["HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"];
+        const allowedRoles: HubUserRole[] = ["HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER", "DELIVERY_DRIVER"];
         if (!email || !password || !role || !allowedRoles.includes(role)) {
             return res.status(400).json({
                 status: false,
                 statusCode: 400,
-                message: "email, password y role (HUB_ADMIN | HUB_STAFF | BUSINESS_VIEWER) son requeridos",
+                message: "email, password y role (HUB_ADMIN | HUB_STAFF | BUSINESS_VIEWER | DELIVERY_DRIVER) son requeridos",
                 data: {},
             });
         }
@@ -275,6 +278,7 @@ export async function createHubUser(req: Request, res: Response): Promise<Respon
             password: hashed,
             role,
             business_id: role === "BUSINESS_VIEWER" ? String(businessId) : null,
+            phone: phoneRaw.length >= 6 ? phoneRaw : null,
             permissions: {
                 manageCatalog:
                     role === "BUSINESS_VIEWER" && (req.body?.manageCatalog === true || req.body?.manageCatalog === "true"),
@@ -287,6 +291,7 @@ export async function createHubUser(req: Request, res: Response): Promise<Respon
             email: user.email,
             role: user.role,
             business_id: user.business_id,
+            phone: (user as any).phone || null,
             permissions: { manageCatalog: (user as any).permissions?.manageCatalog === true },
         };
         return res.status(201).json({
@@ -458,6 +463,7 @@ export async function getMyHubUser(req: Request, res: Response): Promise<Respons
                     email: user.email,
                     role: user.role,
                     business_id: user.business_id || null,
+                    phone: user.phone || null,
                     permissions: { manageCatalog: user.permissions?.manageCatalog === true },
                 },
             },

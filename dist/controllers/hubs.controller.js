@@ -141,7 +141,7 @@ function getMyHub(req, res) {
             const ctx = req.hubContext;
             // El Portal Business solo necesita identidad y branding del hub: nunca
             // su suscripción, límites ni métricas de uso (información del operador).
-            const projection = ctx.role === "BUSINESS_VIEWER"
+            const projection = ctx.role === "BUSINESS_VIEWER" || ctx.role === "DELIVERY_DRIVER"
                 ? "name slug logo favicon branding timezone country currency language"
                 : undefined;
             const query = hubModel_1.default.findById(ctx.hubId);
@@ -189,6 +189,8 @@ const UPDATABLE_FIELDS = [
     "deliveryDefaults",
     "fulfillment",
     "paymentFlow",
+    "orderFlow",
+    "driverVisibility",
     // País de operación (nombre, ej. "El Salvador"). Cambiarlo dispara la
     // propagación de region_settings.country a todos los negocios del hub.
     "country",
@@ -202,11 +204,11 @@ function updateMyHub(req, res) {
             // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
             // claves ya no borra las demás (antes el $set del objeto entero se
             // llevaba por delante deliveryWhatsapp, email, tiktok…).
-            const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment", "paymentFlow"]);
+            const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment", "paymentFlow", "orderFlow", "driverVisibility"]);
             // HUB_STAFF solo administra la operación: métodos/tarifa de entrega, zona por
             // defecto y la matriz de visibilidad. Identidad, marca, contacto, país y
             // liquidaciones son de dueño/admin; lo demás que mande se ignora.
-            const STAFF_FIELDS = new Set(["fulfillment", "deliveryDefaults", "businessVisibility"]);
+            const STAFF_FIELDS = new Set(["fulfillment", "deliveryDefaults", "businessVisibility", "driverVisibility"]);
             const patch = {};
             for (const field of UPDATABLE_FIELDS) {
                 const value = req.body ? req.body[field] : undefined;
@@ -261,6 +263,15 @@ function updateMyHub(req, res) {
                             else if (typeof inner !== "boolean") {
                                 continue;
                             }
+                        }
+                        // orderFlow / driverVisibility: solo sus claves y solo booleanos.
+                        if (field === "orderFlow") {
+                            if (!["hubConfirms", "autoPublishOnConfirm"].includes(key) || typeof inner !== "boolean")
+                                continue;
+                        }
+                        if (field === "driverVisibility") {
+                            if (!["customerName", "customerPhone"].includes(key) || typeof inner !== "boolean")
+                                continue;
                         }
                         if (field === "paymentFlow") {
                             if (key === "requireProof") {
@@ -508,7 +519,7 @@ function incrementHubOrderUsage(req, res) {
  */
 function getHubNotificationConfig(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b;
+        var _a, _b, _c, _d, _e, _f;
         try {
             if (!isValidInternalCall(req)) {
                 return res.status(403).json({
@@ -520,7 +531,7 @@ function getHubNotificationConfig(req, res) {
             }
             const hub = yield hubModel_1.default
                 .findById(String(req.params.hubId))
-                .select("name contact businessVisibility");
+                .select("name contact businessVisibility orderFlow driverVisibility");
             if (!hub) {
                 return res.status(404).json({
                     status: false,
@@ -538,6 +549,15 @@ function getHubNotificationConfig(req, res) {
                     hubWhatsapp: ((_a = hub.contact) === null || _a === void 0 ? void 0 : _a.whatsapp) || null,
                     deliveryWhatsapp: ((_b = hub.contact) === null || _b === void 0 ? void 0 : _b.deliveryWhatsapp) || null,
                     businessVisibility: hub.businessVisibility,
+                    // Sprint 3: confirmación del hub (orders decide si el pedido nace pendiente)
+                    orderFlow: {
+                        hubConfirms: ((_c = hub.orderFlow) === null || _c === void 0 ? void 0 : _c.hubConfirms) === true,
+                        autoPublishOnConfirm: ((_d = hub.orderFlow) === null || _d === void 0 ? void 0 : _d.autoPublishOnConfirm) !== false,
+                    },
+                    driverVisibility: {
+                        customerName: ((_e = hub.driverVisibility) === null || _e === void 0 ? void 0 : _e.customerName) !== false,
+                        customerPhone: ((_f = hub.driverVisibility) === null || _f === void 0 ? void 0 : _f.customerPhone) === true,
+                    },
                 },
             });
         }

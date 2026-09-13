@@ -18,6 +18,13 @@ export interface HubOrdersQuery {
     to?: string;
     /** Número visible (#1042), ID completo o fragmento final del _id. */
     q?: string;
+    /** Sprint 3: confirmación del hub (pending | confirmed | rejected). */
+    confirmation?: string;
+    /** Sprint 3: estado de la bolsa (published | assigned | in_delivery | delivered…). */
+    assignment?: string;
+    driverId?: string;
+    /** Portal del negocio: nunca ve pedidos pendientes de confirmación. */
+    excludePendingConfirmation?: "1";
 }
 
 export async function getHubOrders(hubId: string, query: HubOrdersQuery) {
@@ -29,9 +36,9 @@ export async function getHubOrders(hubId: string, query: HubOrdersQuery) {
     return data;
 }
 
-export async function getHubOrdersSummary(hubId: string, from?: string, to?: string, businessId?: string) {
+export async function getHubOrdersSummary(hubId: string, from?: string, to?: string, businessId?: string, excludePendingConfirmation = false) {
     const { data } = await axios.get(`${ORDERS_SERVICE_LINK}/internal/hub/${hubId}/summary`, {
-        params: { from, to, businessId },
+        params: { from, to, businessId, ...(excludePendingConfirmation ? { excludePendingConfirmation: "1" } : {}) },
         timeout: 15000,
         headers: headers(),
     });
@@ -65,6 +72,46 @@ export async function notifyDeliveryPersonExternal(businessId: string, orderId: 
     return data;
 }
 
+// ── Sprint 3: flujo del pedido (confirmación del hub + bolsa de repartidores) ──
+export type HubOrderFlowAction =
+    | "confirm"
+    | "reject"
+    | "publish"
+    | "unpublish"
+    | "claim"
+    | "assign"
+    | "unassign"
+    | "delivery_status";
+
+export interface HubOrderFlowBody {
+    action: HubOrderFlowAction;
+    actor: { id: string; name: string; role: string };
+    publish?: boolean;
+    reason?: string;
+    driver?: { id: string; name: string };
+    republish?: boolean;
+    status?: string;
+    note?: string | null;
+}
+
+export async function hubOrderFlowExternal(hubId: string, orderId: string, body: HubOrderFlowBody) {
+    const { data } = await axios.post(
+        `${ORDERS_SERVICE_LINK}/internal/hub/${hubId}/orders/${orderId}/flow`,
+        body,
+        { timeout: 15000, headers: headers() }
+    );
+    return data;
+}
+
+/** Pedidos para la app del repartidor: bolsa (pool), los suyos (mine) o entregados (history). */
+export async function getDriverOrdersExternal(hubId: string, driverId: string, scope: "pool" | "mine" | "history") {
+    const { data } = await axios.get(`${ORDERS_SERVICE_LINK}/internal/hub/${hubId}/driver-orders`, {
+        params: { driverId, scope },
+        timeout: 15000,
+        headers: headers(),
+    });
+    return data;
+}
 
 /** Lineas de liquidacion (F4): pedidos entregados+pagados del periodo, sin PII. */
 export async function getHubSettlementLines(hubId: string, businessId: string, from: string, to: string) {

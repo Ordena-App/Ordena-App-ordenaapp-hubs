@@ -135,6 +135,22 @@ const hubSchema = new mongoose_1.Schema({
         requireProof: { type: Boolean, default: true },
         notifyTarget: { type: String, enum: ["hub", "business", "none"], default: "hub" },
     },
+    // ---- Flujo del pedido (Sprint 3) ----
+    // hubConfirms: el hub confirma cada pedido ANTES de que el negocio lo vea y
+    // reciba su WhatsApp (apagado = flujo directo, como SaaS/WL).
+    // autoPublishOnConfirm: al confirmar, el pedido de delivery entra solo a la
+    // bolsa de repartidores (el hub puede desmarcarlo pedido a pedido).
+    orderFlow: {
+        hubConfirms: { type: Boolean, default: false },
+        autoPublishOnConfirm: { type: Boolean, default: true },
+    },
+    // Qué datos del cliente ve el REPARTIDOR en su app. Dirección, referencia y
+    // pin van siempre (los necesita para entregar); el teléfono va apagado por
+    // defecto: el repartidor navega al pin exacto sin llamar al cliente.
+    driverVisibility: {
+        customerName: { type: Boolean, default: true },
+        customerPhone: { type: Boolean, default: false },
+    },
     // Zona horaria del hub: cálculos de apertura, estadísticas y rotación de
     // métricas la respetan. Cada Business mantiene además su propio horario.
     timezone: { type: String, default: "America/El_Salvador" },

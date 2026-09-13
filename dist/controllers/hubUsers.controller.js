@@ -162,7 +162,7 @@ function loginHubUser(req, res) {
             // el snapshot del login le entregaba suscripción, límites, métricas y el
             // WhatsApp del repartidor, y encima se cachea en su localStorage.
             const hubQuery = hubModel_1.default.findById(user.hub_id);
-            const hub = user.role === "BUSINESS_VIEWER"
+            const hub = user.role === "BUSINESS_VIEWER" || user.role === "DELIVERY_DRIVER"
                 ? yield hubQuery.select("name slug logo favicon branding timezone country currency language status")
                 : yield hubQuery;
             if (!hub || hub.status !== "ACTIVE") {
@@ -186,6 +186,7 @@ function loginHubUser(req, res) {
                 email: user.email,
                 role: user.role,
                 business_id: user.business_id || null,
+                phone: user.phone || null,
                 permissions: { manageCatalog: ((_a = user.permissions) === null || _a === void 0 ? void 0 : _a.manageCatalog) === true },
             };
             return res.status(200).json({
@@ -213,14 +214,16 @@ function loginHubUser(req, res) {
  */
 function createHubUser(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d;
+        var _a, _b, _c, _d, _e;
         try {
             const ctx = req.hubContext;
             const { email, password, name, role, businessId } = req.body || {};
+            // Teléfono opcional (repartidores): solo dígitos y '+', acotado.
+            const phoneRaw = typeof ((_a = req.body) === null || _a === void 0 ? void 0 : _a.phone) === "string" ? req.body.phone.replace(/[^\d+]/g, "").slice(0, 20) : "";
             const hubForLock = yield hubModel_1.default.findById(ctx.hubId).select("subscription.pastDueSince").lean();
             // Mora >= 15 días: se bloquea SOLO crear (negocios/usuarios) — la
             // operación pública y todo lo demás siguen intactos (decisión F3 v2).
-            const pastDueSince = (_a = hubForLock === null || hubForLock === void 0 ? void 0 : hubForLock.subscription) === null || _a === void 0 ? void 0 : _a.pastDueSince;
+            const pastDueSince = (_b = hubForLock === null || hubForLock === void 0 ? void 0 : hubForLock.subscription) === null || _b === void 0 ? void 0 : _b.pastDueSince;
             if (pastDueSince && Date.now() - new Date(pastDueSince).getTime() > 15 * 24 * 60 * 60 * 1000) {
                 return res.status(403).json({
                     status: false,
@@ -229,12 +232,12 @@ function createHubUser(req, res) {
                     data: { reason: "past_due_lock" },
                 });
             }
-            const allowedRoles = ["HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"];
+            const allowedRoles = ["HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER", "DELIVERY_DRIVER"];
             if (!email || !password || !role || !allowedRoles.includes(role)) {
                 return res.status(400).json({
                     status: false,
                     statusCode: 400,
-                    message: "email, password y role (HUB_ADMIN | HUB_STAFF | BUSINESS_VIEWER) son requeridos",
+                    message: "email, password y role (HUB_ADMIN | HUB_STAFF | BUSINESS_VIEWER | DELIVERY_DRIVER) son requeridos",
                     data: {},
                 });
             }
@@ -253,7 +256,7 @@ function createHubUser(req, res) {
                 try {
                     yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, String(businessId));
                 }
-                catch (_e) {
+                catch (_f) {
                     return res.status(400).json({
                         status: false,
                         statusCode: 400,
@@ -279,8 +282,9 @@ function createHubUser(req, res) {
                 password: hashed,
                 role,
                 business_id: role === "BUSINESS_VIEWER" ? String(businessId) : null,
+                phone: phoneRaw.length >= 6 ? phoneRaw : null,
                 permissions: {
-                    manageCatalog: role === "BUSINESS_VIEWER" && (((_b = req.body) === null || _b === void 0 ? void 0 : _b.manageCatalog) === true || ((_c = req.body) === null || _c === void 0 ? void 0 : _c.manageCatalog) === "true"),
+                    manageCatalog: role === "BUSINESS_VIEWER" && (((_c = req.body) === null || _c === void 0 ? void 0 : _c.manageCatalog) === true || ((_d = req.body) === null || _d === void 0 ? void 0 : _d.manageCatalog) === "true"),
                 },
             });
             const safeUser = {
@@ -289,7 +293,8 @@ function createHubUser(req, res) {
                 email: user.email,
                 role: user.role,
                 business_id: user.business_id,
-                permissions: { manageCatalog: ((_d = user.permissions) === null || _d === void 0 ? void 0 : _d.manageCatalog) === true },
+                phone: user.phone || null,
+                permissions: { manageCatalog: ((_e = user.permissions) === null || _e === void 0 ? void 0 : _e.manageCatalog) === true },
             };
             return res.status(201).json({
                 status: true,
@@ -467,6 +472,7 @@ function getMyHubUser(req, res) {
                         email: user.email,
                         role: user.role,
                         business_id: user.business_id || null,
+                        phone: user.phone || null,
                         permissions: { manageCatalog: ((_a = user.permissions) === null || _a === void 0 ? void 0 : _a.manageCatalog) === true },
                     },
                 },

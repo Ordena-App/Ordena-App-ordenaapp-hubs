@@ -128,7 +128,7 @@ export async function getMyHub(req: Request, res: Response): Promise<Response> {
         // El Portal Business solo necesita identidad y branding del hub: nunca
         // su suscripción, límites ni métricas de uso (información del operador).
         const projection =
-            ctx.role === "BUSINESS_VIEWER"
+            ctx.role === "BUSINESS_VIEWER" || ctx.role === "DELIVERY_DRIVER"
                 ? "name slug logo favicon branding timezone country currency language"
                 : undefined;
         const query = hubModel.findById(ctx.hubId);
@@ -175,6 +175,8 @@ const UPDATABLE_FIELDS = [
     "deliveryDefaults",
     "fulfillment",
     "paymentFlow",
+    "orderFlow",
+    "driverVisibility",
     // País de operación (nombre, ej. "El Salvador"). Cambiarlo dispara la
     // propagación de region_settings.country a todos los negocios del hub.
     "country",
@@ -187,11 +189,11 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
         // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
         // claves ya no borra las demás (antes el $set del objeto entero se
         // llevaba por delante deliveryWhatsapp, email, tiktok…).
-        const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment", "paymentFlow"]);
+        const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment", "paymentFlow", "orderFlow", "driverVisibility"]);
         // HUB_STAFF solo administra la operación: métodos/tarifa de entrega, zona por
         // defecto y la matriz de visibilidad. Identidad, marca, contacto, país y
         // liquidaciones son de dueño/admin; lo demás que mande se ignora.
-        const STAFF_FIELDS = new Set(["fulfillment", "deliveryDefaults", "businessVisibility"]);
+        const STAFF_FIELDS = new Set(["fulfillment", "deliveryDefaults", "businessVisibility", "driverVisibility"]);
         const patch: Record<string, unknown> = {};
         for (const field of UPDATABLE_FIELDS) {
             const value = req.body ? req.body[field] : undefined;
@@ -231,6 +233,13 @@ export async function updateMyHub(req: Request, res: Response): Promise<Response
                         } else if (typeof inner !== "boolean") {
                             continue;
                         }
+                    }
+                    // orderFlow / driverVisibility: solo sus claves y solo booleanos.
+                    if (field === "orderFlow") {
+                        if (!["hubConfirms", "autoPublishOnConfirm"].includes(key) || typeof inner !== "boolean") continue;
+                    }
+                    if (field === "driverVisibility") {
+                        if (!["customerName", "customerPhone"].includes(key) || typeof inner !== "boolean") continue;
                     }
                     if (field === "paymentFlow") {
                         if (key === "requireProof") {
@@ -519,7 +528,7 @@ export async function getHubNotificationConfig(req: Request, res: Response): Pro
         }
         const hub = await hubModel
             .findById(String(req.params.hubId))
-            .select("name contact businessVisibility");
+            .select("name contact businessVisibility orderFlow driverVisibility");
         if (!hub) {
             return res.status(404).json({
                 status: false,
@@ -537,6 +546,15 @@ export async function getHubNotificationConfig(req: Request, res: Response): Pro
                 hubWhatsapp: hub.contact?.whatsapp || null,
                 deliveryWhatsapp: hub.contact?.deliveryWhatsapp || null,
                 businessVisibility: hub.businessVisibility,
+                // Sprint 3: confirmación del hub (orders decide si el pedido nace pendiente)
+                orderFlow: {
+                    hubConfirms: hub.orderFlow?.hubConfirms === true,
+                    autoPublishOnConfirm: hub.orderFlow?.autoPublishOnConfirm !== false,
+                },
+                driverVisibility: {
+                    customerName: hub.driverVisibility?.customerName !== false,
+                    customerPhone: hub.driverVisibility?.customerPhone === true,
+                },
             },
         });
     } catch (error) {
