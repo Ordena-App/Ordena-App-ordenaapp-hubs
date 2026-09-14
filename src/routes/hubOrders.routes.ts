@@ -14,6 +14,7 @@ import {
     assignMyHubOrder,
     unassignMyHubOrder,
     updateMyHubOrderDeliveryStatus,
+    setMyHubOrderCollection,
     getMyHubDrivers,
     getMyDriverOrders,
     claimMyDriverOrder,
@@ -63,6 +64,8 @@ router.post("/me/orders/:orderId/unpublish", verifyHubJWT, HUB_OPS, unpublishMyH
 router.post("/me/orders/:orderId/assign", verifyHubJWT, HUB_OPS, assignMyHubOrder);
 router.post("/me/orders/:orderId/unassign", verifyHubJWT, HUB_OPS, unassignMyHubOrder);
 router.patch("/me/orders/:orderId/delivery-status", verifyHubJWT, HUB_OPS, updateMyHubOrderDeliveryStatus);
+// Sprint 5: el hub corrige el cobro registrado en un pedido ya entregado.
+router.patch("/me/orders/:orderId/collection", verifyHubJWT, HUB_OPS, setMyHubOrderCollection);
 router.get("/me/drivers", verifyHubJWT, HUB_OPS, getMyHubDrivers);
 
 // App del repartidor: bolsa, mis pedidos, tomar y avanzar la entrega de LOS SUYOS.

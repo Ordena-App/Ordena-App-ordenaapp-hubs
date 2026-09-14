@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import hubModel from "../models/hubModel";
 import hubUserModel from "../models/hubUserModel";
 import { HubContext } from "../utils/auth";
-import { hubOrderFlowExternal, getDriverOrdersExternal, HubOrderFlowBody } from "../services/ordersService.external";
+import { hubOrderFlowExternal, getDriverOrdersExternal, HubOrderFlowBody, HubOrderFlowCollection } from "../services/ordersService.external";
 import { getBusinessesByHubId } from "../services/businessService.external";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -112,7 +112,49 @@ export async function unassignMyHubOrder(req: Request, res: Response): Promise<R
 export async function updateMyHubOrderDeliveryStatus(req: Request, res: Response): Promise<Response> {
     const status = String(req.body?.status || "");
     const note = typeof req.body?.note === "string" ? req.body.note.slice(0, 300) : null;
-    return runFlow(res, req.hubContext!, String(req.params.orderId), { action: "delivery_status", status, note }, "actualizar la entrega");
+    const collection = sanitizeCollection(req.body?.collection);
+    return runFlow(
+        res,
+        req.hubContext!,
+        String(req.params.orderId),
+        { action: "delivery_status", status, note, ...(collection ? { collection } : {}) },
+        "actualizar la entrega"
+    );
+}
+
+// ── Sprint 5: cobro registrado al entregar ──
+
+/**
+ * Sanea body.collection { collected, method?, amount? }. Devuelve null si no es
+ * un objeto con `collected` booleano (orders lo trata como "no cobró"). Las
+ * reglas de negocio (monto por defecto, payment_status) viven en orders.
+ */
+function sanitizeCollection(raw: unknown): HubOrderFlowCollection | null {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    if (typeof o.collected !== "boolean") return null;
+    const out: HubOrderFlowCollection = { collected: o.collected };
+    if (o.method === "cash" || o.method === "wallet" || o.method === "none") out.method = o.method;
+    if (typeof o.amount === "number" && Number.isFinite(o.amount) && o.amount > 0) out.amount = Math.round(o.amount * 100) / 100;
+    return out;
+}
+
+/**
+ * PATCH /me/orders/:orderId/collection  Body: { collection: { collected, method?, amount? } }
+ * El hub corrige lo que el repartidor registró (o no) al entregar. Solo aplica a
+ * pedidos ya entregados (orders lo valida). Responde el pedido actualizado.
+ */
+export async function setMyHubOrderCollection(req: Request, res: Response): Promise<Response> {
+    const collection = sanitizeCollection(req.body?.collection);
+    if (!collection) {
+        return res.status(400).json({
+            status: false,
+            statusCode: 400,
+            message: "collection es requerido: { collected: boolean, method?: cash|wallet|none, amount?: number }",
+            data: {},
+        });
+    }
+    return runFlow(res, req.hubContext!, String(req.params.orderId), { action: "set_collection", collection }, "registrar el cobro");
 }
 
 /** GET /me/drivers — repartidores del hub (para asignar a mano y para Usuarios). */
@@ -220,6 +262,15 @@ function driverOrderView(order: any, vis: DriverVisibility, businesses: Map<stri
             delivered_at: a.delivered_at || null,
             incident_at: a.incident_at || null,
             incident_note: a.incident_note || null,
+            // Sprint 5: lo que el propio repartidor registró al entregar (sin PII).
+            collection: a.collection
+                ? {
+                      collected_by_driver: a.collection.collected_by_driver ?? null,
+                      method: a.collection.method ?? null,
+                      amount: a.collection.amount ?? null,
+                      at: a.collection.at ?? null,
+                  }
+                : null,
         },
         business: biz
             ? {
@@ -276,18 +327,25 @@ export async function claimMyDriverOrder(req: Request, res: Response): Promise<R
     }
 }
 
-/** PATCH /me/driver/orders/:orderId/status  Body: { status: picked_up|on_the_way|delivered|incident, note? } */
+/**
+ * PATCH /me/driver/orders/:orderId/status
+ * Body: { status: picked_up|on_the_way|delivered|incident, note?, collection? }
+ * collection (Sprint 5, solo con 'delivered'): { collected, method?, amount? } —
+ * cómo le pagó el cliente; orders lo guarda en delivery_assignment.collection.
+ */
 export async function updateMyDriverOrderStatus(req: Request, res: Response): Promise<Response> {
     const ctx = req.hubContext!;
     try {
         const actor = await actorOf(ctx);
         const status = String(req.body?.status || "");
         const note = typeof req.body?.note === "string" ? req.body.note.slice(0, 300) : null;
+        const collection = sanitizeCollection(req.body?.collection);
         const resp = await hubOrderFlowExternal(ctx.hubId, String(req.params.orderId), {
             action: "delivery_status",
             actor,
             status,
             note,
+            ...(collection ? { collection } : {}),
         });
         const [vis, businesses] = await Promise.all([readDriverVisibility(ctx.hubId), businessMapFor(ctx.hubId)]);
         if (resp?.data?.order) resp.data.order = driverOrderView(resp.data.order, vis, businesses);

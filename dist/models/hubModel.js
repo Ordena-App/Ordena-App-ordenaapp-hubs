@@ -201,6 +201,29 @@ const hubSchema = new mongoose_1.Schema({
         ],
         default: [],
     },
+    // ---- Liquidación de repartidores (Sprint 5): lo que el hub paga por entrega ----
+    // fixed = monto fijo por entrega; percent = % del costo de envío o del total
+    // del pedido (percentBase); none = sin comisión. La frecuencia define el corte
+    // de las liquidaciones de repartidores (independiente de la de negocios).
+    // Hubs sin esta config se comportan como fixed 0 (sin comisión) y corte diario.
+    driverPayConfig: {
+        commissionType: { type: String, enum: ["fixed", "percent", "none"], default: "fixed" },
+        commissionValue: { type: Number, default: 0 },
+        percentBase: { type: String, enum: ["delivery_cost", "order_total"], default: "delivery_cost" },
+        frequency: { type: String, enum: ["daily", "weekly", "biweekly", "monthly"], default: "daily" },
+    },
+    // Excepciones POR REPARTIDOR (a unos les paga distinto). driverId = _id de hub_users.
+    driverCommissionOverrides: {
+        type: [
+            new mongoose_1.Schema({
+                driverId: { type: String, required: true },
+                commissionType: { type: String, enum: ["fixed", "percent", "none"], default: "fixed" },
+                commissionValue: { type: Number, default: 0 },
+                percentBase: { type: String, enum: ["delivery_cost", "order_total"], default: "delivery_cost" },
+            }, { _id: false }),
+        ],
+        default: [],
+    },
     // ---- Visibilidad hacia los Businesses (F4: configurable por hub) ----
     // Qué información del cliente final puede ver cada Business en su portal.
     businessVisibility: {

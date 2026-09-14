@@ -11,6 +11,7 @@ import hubProductsRoutes from './routes/hubProducts.routes';
 import hubBillingRoutes from './routes/hubBilling.routes';
 import hubReportsRoutes from './routes/hubReports.routes';
 import hubSettlementsRoutes from './routes/hubSettlements.routes';
+import hubDriverSettlementsRoutes from './routes/hubDriverSettlements.routes';
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api/hub-users', hubUsersRoutes);
 app.use('/api/hubs', hubBillingRoutes);
 app.use('/api/hubs', hubReportsRoutes);
 app.use('/api/hubs', hubSettlementsRoutes);
+app.use('/api/hubs', hubDriverSettlementsRoutes);
 app.use('/api/hubs', hubOrdersRoutes);
 app.use('/api/hubs', hubProductsRoutes);
 app.use('/api/hubs', hubBusinessesRoutes);

@@ -23,6 +23,8 @@ const hubModel_1 = __importDefault(require("../models/hubModel"));
 const hubCategoryModel_1 = __importDefault(require("../models/hubCategoryModel"));
 const config_1 = require("../config/config");
 const businessService_external_1 = require("../services/businessService.external");
+const driverPay_1 = require("../utils/driverPay");
+const settlementPeriods_1 = require("../utils/settlementPeriods");
 /**
  * GET /api/hubs/resolve?slug=oe-ya
  * PÚBLICO — lo consumen el middleware del frontend y el storefront del hub
@@ -183,6 +185,9 @@ const UPDATABLE_FIELDS = [
     "contact",
     "settlementConfig",
     "commissionOverrides",
+    // Sprint 5: comisión y corte de la liquidación de repartidores (dueño/admin).
+    "driverPayConfig",
+    "driverCommissionOverrides",
     "timezone",
     "language",
     "businessVisibility",
@@ -204,7 +209,7 @@ function updateMyHub(req, res) {
             // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
             // claves ya no borra las demás (antes el $set del objeto entero se
             // llevaba por delante deliveryWhatsapp, email, tiktok…).
-            const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment", "paymentFlow", "orderFlow", "driverVisibility"]);
+            const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment", "paymentFlow", "orderFlow", "driverVisibility", "driverPayConfig"]);
             // HUB_STAFF solo administra la operación: métodos/tarifa de entrega, zona por
             // defecto y la matriz de visibilidad. Identidad, marca, contacto, país y
             // liquidaciones son de dueño/admin; lo demás que mande se ignora.
@@ -286,6 +291,29 @@ function updateMyHub(req, res) {
                                 continue;
                             }
                         }
+                        // driverPayConfig (Sprint 5): solo sus 4 claves con valores del enum /
+                        // número >= 0 — un valor inválido sería CastError→500 o un 200 mentiroso.
+                        if (field === "driverPayConfig") {
+                            if (key === "commissionType") {
+                                if (!driverPay_1.DRIVER_COMMISSION_TYPES.includes(inner))
+                                    continue;
+                            }
+                            else if (key === "commissionValue") {
+                                if (typeof inner !== "number" || !Number.isFinite(inner) || inner < 0)
+                                    continue;
+                            }
+                            else if (key === "percentBase") {
+                                if (!driverPay_1.DRIVER_PERCENT_BASES.includes(inner))
+                                    continue;
+                            }
+                            else if (key === "frequency") {
+                                if (!settlementPeriods_1.SETTLEMENT_FREQUENCIES.includes(inner))
+                                    continue;
+                            }
+                            else {
+                                continue;
+                            }
+                        }
                         patch[`${field}.${key}`] = inner;
                     }
                     // Regla "mínimo un método": ambos apagados en el mismo body no
@@ -305,11 +333,33 @@ function updateMyHub(req, res) {
                         patch[field] = value.trim();
                     }
                 }
-                else if (field === "deliveryDefaults" || field === "fulfillment") {
+                else if (field === "deliveryDefaults" || field === "fulfillment" || field === "driverPayConfig") {
                     // Solo se acepta como objeto: un `deliveryDefaults: null` crudo
                     // actualizaría el hub sin disparar la propagación (el hook
                     // detecta claves con punto) y dejaría los negocios desfasados.
                     continue;
+                }
+                else if (field === "driverCommissionOverrides") {
+                    // Sprint 5: array saneado ítem a ítem (los inválidos se descartan;
+                    // un driverId repetido se queda con la última regla enviada).
+                    if (!Array.isArray(value))
+                        continue;
+                    const byDriver = new Map();
+                    for (const item of value) {
+                        if (!item || typeof item !== "object" || Array.isArray(item))
+                            continue;
+                        const o = item;
+                        const driverId = typeof o.driverId === "string" ? o.driverId.trim() : "";
+                        if (!/^[0-9a-fA-F]{24}$/.test(driverId))
+                            continue;
+                        const commissionType = driverPay_1.DRIVER_COMMISSION_TYPES.includes(o.commissionType) ? String(o.commissionType) : "fixed";
+                        const commissionValue = typeof o.commissionValue === "number" && Number.isFinite(o.commissionValue) && o.commissionValue >= 0
+                            ? o.commissionValue
+                            : 0;
+                        const percentBase = driverPay_1.DRIVER_PERCENT_BASES.includes(o.percentBase) ? String(o.percentBase) : "delivery_cost";
+                        byDriver.set(driverId, { driverId, commissionType, commissionValue, percentBase });
+                    }
+                    patch[field] = Array.from(byDriver.values());
                 }
                 else {
                     patch[field] = value;

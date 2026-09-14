@@ -180,7 +180,7 @@ Por qué así:
 | 5 | **Sprint 2 — Pagos manuales con comprobante:** el cliente adjunta el comprobante y "Confirma pago"; el comprobante se ve en el detalle del pedido (hub, negocio, dashboard con link al pedido, ticket); destinatario del aviso configurable (hub, negocio o sin aviso); efectivo contra entrega a nivel hub propagado. Aplica también a SaaS y WL (con aviso al negocio; el toggle para apagarlo en el dashboard SaaS queda pendiente). | ✅ 2026-09-11 |
 | 6–8 | **Sprint 3 — Flujo del pedido y bolsa de repartidores:** confirmación del hub (configurable), estados del negocio y de entrega, bolsa con "Tomar pedido", asignación manual por el hub, app móvil del repartidor (acceso con email y contraseña), privacidad hacia el motorizado. | ✅ 2026-09-12 (guía §4e). Pendiente: probar con Oe Ya en la calle; push en la app queda para después. |
 | 9 | **Sprint 4 — Avisos al cliente por WhatsApp:** plantilla de pedido confirmado con tiempo estimado por negocio (pedir a Meta desde ya). | ✅ 2026-09-12 (guía §6.6); falta la aprobación de Meta |
-| 10–11 | **Sprint 5 — Liquidación de repartidores:** comisión global o por repartidor, cobros que retiene (efectivo/Yape), bonos y ajustes, cortes diario/semanal/quincenal/mensual, dashboard del repartidor. | |
+| 10–11 | **Sprint 5 — Liquidación de repartidores:** comisión global o por repartidor, cobros que retiene (efectivo/Yape), bonos y ajustes, cortes diario/semanal/quincenal/mensual, dashboard del repartidor. | ✅ 2026-09-13 (guía §4f) |
 | 12–13 | Envío A→B (entra a la bolsa). | |
 | 14–16 | Solicitud de compra. | |
 | Después | Informes con datos reales. | |
@@ -253,6 +253,8 @@ Reemplaza el Excel de Oe Ya y sirve a cualquier courier que pague a motorizados.
 - **Cortes** diario, semanal, quincenal o mensual reutilizando el motor de períodos de las liquidaciones a negocios, con marca de pagado y referencia.
 - **Dashboard del repartidor** en su app: pedidos del día y del período, lo cobrado, su comisión y lo que debe entregar. **Vista del hub:** una fila por repartidor y período, con detalle por pedido y CSV.
 - Depende de la bolsa (Sprint 2) porque necesita saber quién entregó cada pedido y cómo cobró.
+
+**Hecho 2026-09-13:** ver guía §4f.
 
 ### 11.6 Orden final propuesto
 

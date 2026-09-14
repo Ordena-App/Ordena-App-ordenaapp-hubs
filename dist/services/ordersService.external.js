@@ -19,6 +19,7 @@ exports.notifyDeliveryPersonExternal = notifyDeliveryPersonExternal;
 exports.hubOrderFlowExternal = hubOrderFlowExternal;
 exports.getDriverOrdersExternal = getDriverOrdersExternal;
 exports.getHubSettlementLines = getHubSettlementLines;
+exports.getDriverSettlementLines = getDriverSettlementLines;
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("../config/config");
 // Server-to-server hacia orders-service (endpoints /internal/hub/* con secreto
@@ -88,6 +89,20 @@ function getHubSettlementLines(hubId, businessId, from, to) {
             timeout: 30000,
             headers: headers(),
             params: { businessId, from, to },
+        });
+        return data;
+    });
+}
+/**
+ * Entregas de UN repartidor (delivery_assignment delivered) entre from y to,
+ * con lo que cobró al cliente en cada una. Base de su liquidación y de "Mi cuenta".
+ */
+function getDriverSettlementLines(hubId, driverId, from, to) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.ORDERS_SERVICE_LINK}/internal/hub/${hubId}/driver-settlement-lines`, {
+            timeout: 30000,
+            headers: headers(),
+            params: { driverId, from, to },
         });
         return data;
     });

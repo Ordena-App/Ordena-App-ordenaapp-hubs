@@ -293,6 +293,108 @@ liquidación de repartidores del Sprint 5).
 sigue disponible como opción secundaria en el drawer solo si el hub tiene ese número en
 Contacto → “WhatsApp del repartidor”; con la bolsa ya no hace falta.
 
+## 4f. Liquidación de repartidores (Sprint 5)
+
+Reemplaza el Excel del courier y sirve a cualquier hub que pague a motorizados. Sin
+variables nuevas ni migraciones: un hub sin `driverPayConfig` se comporta como comisión
+**fija 0** (sin comisión) con corte **diario**, y el único cambio de datos es un índice
+nuevo en orders (`delivery_assignment.driver_id` + `delivered_at`) que mongoose crea al
+arrancar. Orden de deploy: **orders → hubs → frontend**.
+
+**Dónde se configura:** hub-admin → **Liquidaciones** → pestaña **Repartidores** (el
+segmented "Negocios | Repartidores" de arriba de la página). Tarjeta de configuración
+plegable:
+
+| Campo | Opciones | Default |
+|---|---|---|
+| Tipo de comisión | **Monto fijo por entrega** · **% del envío o del total** · **Sin comisión** | fijo |
+| Valor | monto por entrega (fijo) o porcentaje (%), ≥ 0 | 0 |
+| Base del % (solo con %) | **del costo de envío** (`delivery_cost`) · **del total del pedido** (`order_total`) | costo de envío |
+| Frecuencia de corte | diaria · semanal (lunes–domingo) · quincenal · mensual — mismas claves y zona horaria que §4d | diaria |
+| Excepciones por repartidor | repartidor + tipo/valor/base propios; manda sobre la regla general | ninguna |
+
+Se guarda en `hub.driverPayConfig` y `hub.driverCommissionOverrides` (`PUT /hubs/me`, solo
+HUB_OWNER/HUB_ADMIN; HUB_STAFF no lo edita). Cambiar la regla no recalcula nada por sí
+sola: aplica la próxima vez que pulses **Calcular** (las Pendientes se regeneran con la
+regla vigente; las Pagadas no cambian).
+
+**Qué registra el repartidor al entregar (`/hub-driver`):** al pulsar **"Entregado al
+cliente"** en un pedido que NO está pagado, la app pregunta **"¿Cómo te pagó el
+cliente?"** con tres botones: **En efectivo** (`cash`), **Transferencia / billetera**
+(`wallet`) o **No cobré** (`none`, "lo cobra el negocio o el hub"). Si cobró, el pedido
+queda **Pagado** (`payment_status = Paid`: el dinero que recibió el repartidor ES el pago)
+y se guarda `order.delivery_assignment.collection { collected_by_driver, method, amount,
+at }` con el total del pedido como monto. Si el pedido ya estaba pagado (tarjeta,
+comprobante…) no pregunta nada y registra "sin cobro". La tarjeta de Entregados muestra
+"Cobraste {monto} en efectivo" / "Sin cobro". El hub puede **corregir el cobro** desde el
+drawer del pedido → sección Repartidor ("Cobró {monto} (efectivo|billetera)" / "No cobró
+(lo cobra el negocio/hub)", botones "Marcó cobro en efectivo" / "No cobró"); pasar a "no
+cobró" NO revierte el estado de pago del pedido (se cambia aparte si hace falta). Todo
+queda en `delivery_assignment.history`.
+
+**Cómo se calcula (botón "Calcular liquidaciones" del período elegido):** hubs pide a
+orders las entregas de cada repartidor cuyo `delivered_at` cae en el período (en la TZ
+del hub) y guarda una liquidación por repartidor y período (colección
+`hub_driver_settlements`, única por `{hubId, driverId, period}`):
+
+- **Comisión por línea:** fijo → el monto por entrega; % → base (envío o total) × valor
+  / 100; sin comisión → 0. Se aplica la excepción del repartidor si existe, si no la regla
+  general. Todo a 2 decimales.
+- **Ajustes:** bonos (monto **positivo**, a favor del repartidor) y descuentos (monto
+  **negativo**), con concepto, quién lo agregó y cuándo. Se agregan/quitan desde el drawer
+  mientras la liquidación está Pendiente (el toggle Bono/Descuento fija el signo).
+- **`driverEarnings` = comisión + ajustes** → lo que gana el repartidor.
+- **`netToHub` = cobrado − `driverEarnings`** → **positivo:** el repartidor le entrega ese
+  dinero al hub ("Entrega al hub {monto}", ámbar); **negativo:** el hub le paga al
+  repartidor ("El hub le paga {monto}", esmeralda); 0: "Al día".
+- **Pagadas no se recalculan:** Calcular salta las que ya están Pagadas (`skippedPaid`) y
+  regenera solo las Pendientes. **Los ajustes sobreviven al recálculo:** se conservan los
+  de la liquidación Pendiente y se recalculan los totales.
+- **Marcar pagada** (referencia opcional) la congela con fecha y quién la marcó; repetirlo
+  no hace nada (idempotente).
+- **Descargar CSV:** una fila por entrega, una fila por ajuste y los totales, con BOM
+  para que Excel lo abra bien (igual que el CSV de negocios).
+
+| Campo de la liquidación | Qué es |
+|---|---|
+| `period` · `frequency` · `periodStart` · `periodEnd` | Clave del corte (`YYYY-MM-DD`, `YYYY-Www`, `YYYY-MM-Q1` / `YYYY-MM-Q2`, `YYYY-MM`) y su rango en la TZ del hub |
+| `driverId` · `driverName` · `driverEmail` | El repartidor (usuario del hub con rol Repartidor) |
+| `deliveriesCount` | Entregas del repartidor en el período (`delivery_assignment.status = delivered`) |
+| `collectedTotal` | Lo que cobró el repartidor (efectivo + billetera) |
+| `deliveryFeesTotal` · `orderTotalsTotal` | Suma de costos de envío y de totales de los pedidos entregados |
+| `commissionType` · `commissionValue` · `percentBase` | Regla aplicada (la resuelta para ese repartidor al calcular) |
+| `commissionAmount` | Suma de la comisión de cada línea |
+| `adjustments[]` · `adjustmentsTotal` | Bonos (+) y descuentos (−): concepto, monto, autor, fecha |
+| `driverEarnings` | `commissionAmount + adjustmentsTotal` |
+| `netToHub` | `collectedTotal − driverEarnings` (> 0 entrega al hub · < 0 el hub le paga) |
+| `lines[]` · `linesTruncated` | Una por pedido: #, negocio, entregado, total, envío, km, tipo de pago, cobró (método/monto), comisión. Sin datos del cliente; tope 5000 |
+| `status` · `paidAt` · `paidReference` · `paidBy` | `PENDING` o `PAID`, con fecha, referencia y quién la marcó |
+| `currency` | La del hub |
+
+**Ejemplo:** regla "fijo 2.00 por entrega". En el día el repartidor hizo **10 entregas** y
+cobró **180.00 en efectivo**; el hub le agregó un **bono de 5.00**. Comisión = 10 × 2.00 =
+20.00 · `driverEarnings` = 20.00 + 5.00 = **25.00** · `netToHub` = 180.00 − 25.00 =
+**155.00** → el repartidor **entrega 155.00 al hub** y se queda con 25.00. Si solo hubiera
+cobrado 10.00, `netToHub` = −15.00 → **el hub le paga 15.00**.
+
+**Qué ve el repartidor (`/hub-driver` → pestaña "Mi cuenta"; se carga al entrar y con
+Actualizar, sin polling):** tarjeta **Hoy** (entregas, cobrado, tu comisión y la línea
+clave: "Debes entregar al hub {monto}" en ámbar / "El hub te debe {monto}" en esmeralda /
+"Al día"), tarjeta **Período actual** (el corte en curso según la frecuencia del hub, con
+los mismos números), su regla en palabras ("Ganas 2.00 por entrega" / "Ganas 10% del
+envío" / "Sin comisión configurada") y sus últimas 12 **liquidaciones** (período,
+Pendiente/Pagada con referencia, entregas, cobrado, comisión ± ajustes, neto con el mismo
+lenguaje); al tocar una se abre el detalle con sus líneas y ajustes. Solo ve las suyas
+(`GET /api/hubs/me/driver/account`; el detalle exige `driverId === userId`).
+
+**Para depurar:** hubs (`/api/hubs`, roles HUB_OWNER/HUB_ADMIN salvo que se indique):
+`POST /me/driver-settlements/generate { period, driverId? }`, `GET /me/driver-settlements`,
+`GET /me/driver-settlements/:id` (también el repartidor dueño), `PATCH …/:id/paid`,
+`POST` / `DELETE …/:id/adjustments` (409 si ya está Pagada), `PATCH
+/me/orders/:orderId/collection` (también HUB_STAFF) y `GET /me/driver/account`
+(Repartidor). orders: `GET /internal/hub/:hubId/driver-settlement-lines?driverId=&from=&to=`
+con `x-ordena-secret`, y la acción `set_collection` del flow.
+
 ---
 
 ## 5. Stripe (paso a paso)
@@ -758,6 +860,17 @@ staging a producción (en orden):
     de pago correcta → un segundo intento de confirmación / cambio de estado **no
     duplica** el mensaje (`customer_notified_at` ya tiene fecha). En SaaS/WL el toggle
     nace apagado (Ajustes → WhatsApp): encenderlo solo en los negocios que lo pidan.
+19. ☐ Sprint 5 (liquidación de repartidores): deployar **orders → hubs → frontend** (sin
+    envs ni migraciones; el índice nuevo de orders lo crea mongoose al arrancar, §4f). En el
+    hub: **Liquidaciones → pestaña Repartidores** → configurar la regla (tipo, valor, base
+    del %, frecuencia y excepciones) → **Guardar**. Smoke: un repartidor entrega desde
+    `/hub-driver` un pedido de efectivo marcando **"En efectivo"** → el pedido queda
+    **Pagado** y el drawer del hub muestra "Cobró {monto} (efectivo)" → **Calcular
+    liquidaciones** del día → aparece la fila del repartidor con cobrado / comisión / neto
+    ("Entrega al hub …") → agregar un bono desde el drawer, **Marcar pagada** con
+    referencia y **Descargar CSV** (una fila por entrega + el ajuste + totales) → en
+    `/hub-driver` → **Mi cuenta** el repartidor ve Hoy, el período actual y la liquidación
+    Pagada con su referencia.
 
 ---
 
