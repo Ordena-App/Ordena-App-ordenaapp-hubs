@@ -5,6 +5,7 @@ import {
     createHubUser,
     getHubUsers,
     deleteHubUser,
+    changeMyHubPassword,
 } from "../controllers/hubUsers.controller";
 import { verifyHubJWT, requireHubRole } from "../utils/auth";
 
@@ -13,6 +14,9 @@ const router = Router();
 // ---- Públicas (onboarding self-serve + login de todos los roles) ----
 router.post("/register", registerHubWithOwner);
 router.post("/login", loginHubUser);
+
+// ---- Sesión propia: cambio de contraseña (solo dueño y admins) ----
+router.patch("/me/password", verifyHubJWT, requireHubRole("HUB_OWNER", "HUB_ADMIN"), changeMyHubPassword);
 
 // ---- Protegidas ----
 router.get("/", verifyHubJWT, requireHubRole("HUB_OWNER", "HUB_ADMIN"), getHubUsers);

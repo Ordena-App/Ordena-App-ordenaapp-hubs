@@ -24,7 +24,8 @@ router.get("/resolve-by-domain", resolveHubByDomain);
 
 // Protegidas
 router.get("/me", verifyHubJWT, getMyHub);
-router.put("/me", verifyHubJWT, requireHubRole("HUB_OWNER", "HUB_ADMIN"), updateMyHub);
+// HUB_STAFF también entra: el controller le limita los campos a entrega y visibilidad.
+router.put("/me", verifyHubJWT, requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"), updateMyHub);
 
 // Dominio custom del hub (F4)
 router.post("/me/domain", verifyHubJWT, requireHubRole("HUB_OWNER"), setMyHubDomain);

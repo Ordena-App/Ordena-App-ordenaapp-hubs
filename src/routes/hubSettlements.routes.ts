@@ -23,7 +23,7 @@ router.post(
 router.get(
     "/me/settlements",
     verifyHubJWT,
-    requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
+    requireHubRole("HUB_OWNER", "HUB_ADMIN"),
     listMySettlements
 );
 // El detalle lo puede ver también el BUSINESS_VIEWER dueño (candado en el controller)

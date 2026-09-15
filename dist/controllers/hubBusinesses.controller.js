@@ -50,7 +50,7 @@ function upstreamError(res, error, action) {
  */
 function createBusinessForMyHub(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
         const ctx = req.hubContext;
         try {
             const { name, slug, description, industry, country_code, phone, email, address, region_settings } = req.body || {};
@@ -131,19 +131,13 @@ function createBusinessForMyHub(req, res) {
                 : {})), { 
                 // Métodos de entrega del hub: el checkout nace ofreciendo lo que el
                 // operador decidió (default: delivery + recogida, tarifa 0).
-                fulfillment: {
-                    deliveryEnabled: ((_l = hub.fulfillment) === null || _l === void 0 ? void 0 : _l.deliveryEnabled) !== false,
-                    pickupEnabled: ((_m = hub.fulfillment) === null || _m === void 0 ? void 0 : _m.pickupEnabled) !== false,
-                    deliveryFee: typeof ((_o = hub.fulfillment) === null || _o === void 0 ? void 0 : _o.deliveryFee) === "number" && hub.fulfillment.deliveryFee >= 0
-                        ? hub.fulfillment.deliveryFee
-                        : 0,
-                } }));
+                fulfillment: (0, businessService_external_1.buildHubFulfillmentPayload)(hub.fulfillment) }));
             yield hubModel_1.default.updateOne({ _id: ctx.hubId }, { $inc: { "usageMetrics.businessesCount": 1 }, $set: { updated_at: new Date() } });
             return res.status(201).json({
                 status: true,
                 statusCode: 201,
                 message: "Negocio creado correctamente",
-                data: (_p = created === null || created === void 0 ? void 0 : created.data) !== null && _p !== void 0 ? _p : created,
+                data: (_l = created === null || created === void 0 ? void 0 : created.data) !== null && _l !== void 0 ? _l : created,
             });
         }
         catch (error) {
@@ -213,7 +207,7 @@ function updateBusinessOperationalStatus(req, res) {
  */
 function getMyHubBusinessDetail(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d;
+        var _a, _b, _c, _d, _e;
         const ctx = req.hubContext;
         try {
             const businessId = String(req.params.businessId);
@@ -241,6 +235,10 @@ function getMyHubBusinessDetail(req, res) {
                         industry: business.industry,
                         phone: business.phone,
                         address: business.address,
+                        country_code: business.country_code,
+                        // Pin del negocio (delivery por distancia del hub): sin él el dashboard
+                        // no podría hidratarlo y lo borraría al guardar la información.
+                        location: (_e = business.location) !== null && _e !== void 0 ? _e : null,
                         operationalStatus: business.operationalStatus || "active",
                     },
                     businessHours,
@@ -266,6 +264,21 @@ function updateMyHubBusinessInfo(req, res) {
             for (const f of BUSINESS_INFO_FIELDS) {
                 if (typeof (req.body || {})[f] === "string")
                     patch[f] = req.body[f];
+            }
+            // Ubicación del negocio (pin): punto A del delivery por distancia.
+            // null limpia; el patch interno de business valida lat/lng.
+            if (Object.prototype.hasOwnProperty.call(req.body || {}, "location")) {
+                const loc = req.body.location;
+                if (loc === null) {
+                    patch.location = null;
+                }
+                else if (loc && typeof loc === "object" && Number.isFinite(Number(loc.lat)) && Number.isFinite(Number(loc.lng))) {
+                    patch.location = {
+                        lat: Number(loc.lat),
+                        lng: Number(loc.lng),
+                        source: ["pin", "geocode", "gps"].includes(loc.source) ? loc.source : "pin",
+                    };
+                }
             }
             if (Object.keys(patch).length === 0) {
                 return res.status(400).json({
