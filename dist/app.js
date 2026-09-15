@@ -15,6 +15,7 @@ const hubProducts_routes_1 = __importDefault(require("./routes/hubProducts.route
 const hubBilling_routes_1 = __importDefault(require("./routes/hubBilling.routes"));
 const hubReports_routes_1 = __importDefault(require("./routes/hubReports.routes"));
 const hubSettlements_routes_1 = __importDefault(require("./routes/hubSettlements.routes"));
+const hubDriverSettlements_routes_1 = __importDefault(require("./routes/hubDriverSettlements.routes"));
 const app = (0, express_1.default)();
 app.set('port', config_1.PORT);
 app.use((0, morgan_1.default)('dev'));
@@ -27,6 +28,7 @@ app.use('/api/hub-users', hubUsers_routes_1.default);
 app.use('/api/hubs', hubBilling_routes_1.default);
 app.use('/api/hubs', hubReports_routes_1.default);
 app.use('/api/hubs', hubSettlements_routes_1.default);
+app.use('/api/hubs', hubDriverSettlements_routes_1.default);
 app.use('/api/hubs', hubOrders_routes_1.default);
 app.use('/api/hubs', hubProducts_routes_1.default);
 app.use('/api/hubs', hubBusinesses_routes_1.default);

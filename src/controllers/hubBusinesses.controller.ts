@@ -9,6 +9,7 @@ import {
     patchBusinessWeeklyHours,
     uploadBusinessLogoExternal,
     buildHubFulfillmentPayload,
+    buildHubPaymentFlowPayload,
 } from "../services/businessService.external";
 
 // Traduce fallos del upstream (business-service) a respuestas claras.
@@ -135,6 +136,8 @@ export async function createBusinessForMyHub(req: Request, res: Response): Promi
             // Métodos de entrega del hub: el checkout nace ofreciendo lo que el
             // operador decidió (default: delivery + recogida, tarifa 0).
             fulfillment: buildHubFulfillmentPayload(hub.fulfillment),
+            // Comprobante de pago y destinatario del aviso según el hub.
+            payment_flow: buildHubPaymentFlowPayload(hub),
         });
 
         await hubModel.updateOne(
@@ -240,6 +243,8 @@ export async function getMyHubBusinessDetail(req: Request, res: Response): Promi
                     // Pin del negocio (delivery por distancia del hub): sin él el dashboard
                     // no podría hidratarlo y lo borraría al guardar la información.
                     location: business.location ?? null,
+                    // Tiempo estimado de entrega (min–max minutos) para el aviso al cliente.
+                    estimated_delivery_minutes: business.delivery_options?.estimated_delivery_minutes ?? null,
                     operationalStatus: business.operationalStatus || "active",
                 },
                 businessHours,
@@ -277,6 +282,12 @@ export async function updateMyHubBusinessInfo(req: Request, res: Response): Prom
                     source: ["pin", "geocode", "gps"].includes(loc.source) ? loc.source : "pin",
                 };
             }
+        }
+        // Tiempo estimado de entrega (min–max minutos). null limpia; business lo sanea.
+        if (Object.prototype.hasOwnProperty.call(req.body || {}, "estimated_delivery_minutes")) {
+            const eta = (req.body as any).estimated_delivery_minutes;
+            patch.estimated_delivery_minutes =
+                eta === null || eta === undefined ? null : { min: eta?.min ?? null, max: eta?.max ?? null };
         }
         if (Object.keys(patch).length === 0) {
             return res.status(400).json({
@@ -344,5 +355,37 @@ export async function updateMyHubBusinessHours(req: Request, res: Response): Pro
             return res.status(st).json(error.response.data);
         }
         return upstreamError(res, error, "guardar el horario");
+    }
+}
+
+/**
+ * PATCH /api/hubs/me/portal/business/eta  (BUSINESS_VIEWER)
+ * El negocio fija su tiempo estimado de entrega SOLO si el hub lo permite
+ * (fulfillment.businessesEditEta). Body: { estimated_delivery_minutes: {min,max} | null }.
+ */
+export async function updateMyPortalBusinessEta(req: Request, res: Response): Promise<Response> {
+    const ctx = req.hubContext!;
+    try {
+        const businessId = String(ctx.businessId || "");
+        if (!businessId) {
+            return res.status(403).json({ status: false, statusCode: 403, message: "Sesión sin negocio", data: {} });
+        }
+        const hub: any = await hubModel.findById(ctx.hubId).select("fulfillment").lean();
+        if (hub?.fulfillment?.businessesEditEta !== true) {
+            return res.status(403).json({
+                status: false,
+                statusCode: 403,
+                message: "El tiempo estimado de tu negocio lo define el hub",
+                data: {},
+            });
+        }
+        await assertBusinessBelongsToHub(ctx.hubId, businessId);
+        const eta = (req.body || {}).estimated_delivery_minutes;
+        const updated = await patchBusinessInternal(businessId, {
+            estimated_delivery_minutes: eta === null || eta === undefined ? null : { min: eta?.min ?? null, max: eta?.max ?? null },
+        });
+        return res.status(200).json({ status: true, statusCode: 200, message: "Tiempo estimado guardado", data: { business: updated?.data ?? updated } });
+    } catch (error: any) {
+        return upstreamError(res, error, "guardar el tiempo estimado");
     }
 }

@@ -23,6 +23,8 @@ const hubModel_1 = __importDefault(require("../models/hubModel"));
 const hubCategoryModel_1 = __importDefault(require("../models/hubCategoryModel"));
 const config_1 = require("../config/config");
 const businessService_external_1 = require("../services/businessService.external");
+const driverPay_1 = require("../utils/driverPay");
+const settlementPeriods_1 = require("../utils/settlementPeriods");
 /**
  * GET /api/hubs/resolve?slug=oe-ya
  * PÚBLICO — lo consumen el middleware del frontend y el storefront del hub
@@ -141,7 +143,7 @@ function getMyHub(req, res) {
             const ctx = req.hubContext;
             // El Portal Business solo necesita identidad y branding del hub: nunca
             // su suscripción, límites ni métricas de uso (información del operador).
-            const projection = ctx.role === "BUSINESS_VIEWER"
+            const projection = ctx.role === "BUSINESS_VIEWER" || ctx.role === "DELIVERY_DRIVER"
                 ? "name slug logo favicon branding timezone country currency language"
                 : undefined;
             const query = hubModel_1.default.findById(ctx.hubId);
@@ -183,11 +185,17 @@ const UPDATABLE_FIELDS = [
     "contact",
     "settlementConfig",
     "commissionOverrides",
+    // Sprint 5: comisión y corte de la liquidación de repartidores (dueño/admin).
+    "driverPayConfig",
+    "driverCommissionOverrides",
     "timezone",
     "language",
     "businessVisibility",
     "deliveryDefaults",
     "fulfillment",
+    "paymentFlow",
+    "orderFlow",
+    "driverVisibility",
     // País de operación (nombre, ej. "El Salvador"). Cambiarlo dispara la
     // propagación de region_settings.country a todos los negocios del hub.
     "country",
@@ -201,11 +209,11 @@ function updateMyHub(req, res) {
             // Los objetos anidados se aplican por DOT-PATH: mandar `contact` con dos
             // claves ya no borra las demás (antes el $set del objeto entero se
             // llevaba por delante deliveryWhatsapp, email, tiktok…).
-            const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment"]);
+            const NESTED = new Set(["branding", "contact", "businessVisibility", "settlementConfig", "deliveryDefaults", "fulfillment", "paymentFlow", "orderFlow", "driverVisibility", "driverPayConfig"]);
             // HUB_STAFF solo administra la operación: métodos/tarifa de entrega, zona por
             // defecto y la matriz de visibilidad. Identidad, marca, contacto, país y
             // liquidaciones son de dueño/admin; lo demás que mande se ignora.
-            const STAFF_FIELDS = new Set(["fulfillment", "deliveryDefaults", "businessVisibility"]);
+            const STAFF_FIELDS = new Set(["fulfillment", "deliveryDefaults", "businessVisibility", "driverVisibility"]);
             const patch = {};
             for (const field of UPDATABLE_FIELDS) {
                 const value = req.body ? req.body[field] : undefined;
@@ -230,7 +238,7 @@ function updateMyHub(req, res) {
                         // fulfillment: claves conocidas; booleanos, fee número >= 0,
                         // pricingMode enum y distance {números >= 0, max null|>0} por dot-path.
                         if (field === "fulfillment") {
-                            if (!["deliveryEnabled", "pickupEnabled", "deliveryFee", "pricingMode", "distance"].includes(key))
+                            if (!["deliveryEnabled", "pickupEnabled", "deliveryFee", "pricingMode", "distance", "cashOnDelivery", "businessesEditEta"].includes(key))
                                 continue;
                             if (key === "deliveryFee") {
                                 if (typeof inner !== "number" || !Number.isFinite(inner) || inner < 0)
@@ -261,6 +269,51 @@ function updateMyHub(req, res) {
                                 continue;
                             }
                         }
+                        // orderFlow / driverVisibility: solo sus claves y solo booleanos.
+                        if (field === "orderFlow") {
+                            if (!["hubConfirms", "autoPublishOnConfirm", "notifyCustomerOnConfirm"].includes(key) || typeof inner !== "boolean")
+                                continue;
+                        }
+                        if (field === "driverVisibility") {
+                            if (!["customerName", "customerPhone"].includes(key) || typeof inner !== "boolean")
+                                continue;
+                        }
+                        if (field === "paymentFlow") {
+                            if (key === "requireProof") {
+                                if (typeof inner !== "boolean")
+                                    continue;
+                            }
+                            else if (key === "notifyTarget") {
+                                if (inner !== "hub" && inner !== "business" && inner !== "none")
+                                    continue;
+                            }
+                            else {
+                                continue;
+                            }
+                        }
+                        // driverPayConfig (Sprint 5): solo sus 4 claves con valores del enum /
+                        // número >= 0 — un valor inválido sería CastError→500 o un 200 mentiroso.
+                        if (field === "driverPayConfig") {
+                            if (key === "commissionType") {
+                                if (!driverPay_1.DRIVER_COMMISSION_TYPES.includes(inner))
+                                    continue;
+                            }
+                            else if (key === "commissionValue") {
+                                if (typeof inner !== "number" || !Number.isFinite(inner) || inner < 0)
+                                    continue;
+                            }
+                            else if (key === "percentBase") {
+                                if (!driverPay_1.DRIVER_PERCENT_BASES.includes(inner))
+                                    continue;
+                            }
+                            else if (key === "frequency") {
+                                if (!settlementPeriods_1.SETTLEMENT_FREQUENCIES.includes(inner))
+                                    continue;
+                            }
+                            else {
+                                continue;
+                            }
+                        }
                         patch[`${field}.${key}`] = inner;
                     }
                     // Regla "mínimo un método": ambos apagados en el mismo body no
@@ -280,11 +333,33 @@ function updateMyHub(req, res) {
                         patch[field] = value.trim();
                     }
                 }
-                else if (field === "deliveryDefaults" || field === "fulfillment") {
+                else if (field === "deliveryDefaults" || field === "fulfillment" || field === "driverPayConfig") {
                     // Solo se acepta como objeto: un `deliveryDefaults: null` crudo
                     // actualizaría el hub sin disparar la propagación (el hook
                     // detecta claves con punto) y dejaría los negocios desfasados.
                     continue;
+                }
+                else if (field === "driverCommissionOverrides") {
+                    // Sprint 5: array saneado ítem a ítem (los inválidos se descartan;
+                    // un driverId repetido se queda con la última regla enviada).
+                    if (!Array.isArray(value))
+                        continue;
+                    const byDriver = new Map();
+                    for (const item of value) {
+                        if (!item || typeof item !== "object" || Array.isArray(item))
+                            continue;
+                        const o = item;
+                        const driverId = typeof o.driverId === "string" ? o.driverId.trim() : "";
+                        if (!/^[0-9a-fA-F]{24}$/.test(driverId))
+                            continue;
+                        const commissionType = driverPay_1.DRIVER_COMMISSION_TYPES.includes(o.commissionType) ? String(o.commissionType) : "fixed";
+                        const commissionValue = typeof o.commissionValue === "number" && Number.isFinite(o.commissionValue) && o.commissionValue >= 0
+                            ? o.commissionValue
+                            : 0;
+                        const percentBase = driverPay_1.DRIVER_PERCENT_BASES.includes(o.percentBase) ? String(o.percentBase) : "delivery_cost";
+                        byDriver.set(driverId, { driverId, commissionType, commissionValue, percentBase });
+                    }
+                    patch[field] = Array.from(byDriver.values());
                 }
                 else {
                     patch[field] = value;
@@ -345,6 +420,17 @@ function updateMyHub(req, res) {
                 }
                 catch (propagateError) {
                     console.error("No se pudo propagar el país a los negocios del hub:", propagateError instanceof Error ? propagateError.message : propagateError);
+                }
+            }
+            // Comprobante de pago: cambia con paymentFlow o con el WhatsApp del hub (es el
+            // número al que va el aviso cuando notifyTarget = 'hub'). Best-effort.
+            const paymentFlowTouched = Object.keys(patch).some((k) => k.startsWith("paymentFlow.") || k === "contact.whatsapp");
+            if (paymentFlowTouched && hub) {
+                try {
+                    yield (0, businessService_external_1.propagateHubPaymentFlowExternal)(String(ctx.hubId), (0, businessService_external_1.buildHubPaymentFlowPayload)(hub));
+                }
+                catch (propagateError) {
+                    console.error("No se pudo propagar el flujo de comprobante a los negocios del hub:", propagateError instanceof Error ? propagateError.message : propagateError);
                 }
             }
             // Métodos de entrega (fulfillment): mismo patrón best-effort.
@@ -483,7 +569,7 @@ function incrementHubOrderUsage(req, res) {
  */
 function getHubNotificationConfig(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b;
+        var _a, _b, _c, _d, _e, _f, _g;
         try {
             if (!isValidInternalCall(req)) {
                 return res.status(403).json({
@@ -495,7 +581,7 @@ function getHubNotificationConfig(req, res) {
             }
             const hub = yield hubModel_1.default
                 .findById(String(req.params.hubId))
-                .select("name contact businessVisibility");
+                .select("name contact businessVisibility orderFlow driverVisibility");
             if (!hub) {
                 return res.status(404).json({
                     status: false,
@@ -513,6 +599,18 @@ function getHubNotificationConfig(req, res) {
                     hubWhatsapp: ((_a = hub.contact) === null || _a === void 0 ? void 0 : _a.whatsapp) || null,
                     deliveryWhatsapp: ((_b = hub.contact) === null || _b === void 0 ? void 0 : _b.deliveryWhatsapp) || null,
                     businessVisibility: hub.businessVisibility,
+                    // Sprint 3: confirmación del hub (orders decide si el pedido nace pendiente)
+                    // Sprint 4: aviso al cliente por WhatsApp al confirmar (default true;
+                    // orders lo lee aquí antes de enviar pedido_confirmado_cliente_es)
+                    orderFlow: {
+                        hubConfirms: ((_c = hub.orderFlow) === null || _c === void 0 ? void 0 : _c.hubConfirms) === true,
+                        autoPublishOnConfirm: ((_d = hub.orderFlow) === null || _d === void 0 ? void 0 : _d.autoPublishOnConfirm) !== false,
+                        notifyCustomerOnConfirm: ((_e = hub.orderFlow) === null || _e === void 0 ? void 0 : _e.notifyCustomerOnConfirm) !== false,
+                    },
+                    driverVisibility: {
+                        customerName: ((_f = hub.driverVisibility) === null || _f === void 0 ? void 0 : _f.customerName) !== false,
+                        customerPhone: ((_g = hub.driverVisibility) === null || _g === void 0 ? void 0 : _g.customerPhone) === true,
+                    },
                 },
             });
         }

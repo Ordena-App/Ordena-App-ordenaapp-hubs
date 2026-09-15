@@ -19,6 +19,8 @@ exports.getMyBusinessPackageTemplates = getMyBusinessPackageTemplates;
 exports.getMyBusinessProviders = getMyBusinessProviders;
 exports.createMyBusinessProvider = createMyBusinessProvider;
 exports.createMyBusinessCategory = createMyBusinessCategory;
+exports.updateMyBusinessCategory = updateMyBusinessCategory;
+exports.deleteMyBusinessCategory = deleteMyBusinessCategory;
 const businessService_external_1 = require("../services/businessService.external");
 const productsService_external_1 = require("../services/productsService.external");
 // Gestión de productos de los negocios del hub (F2.1). Regla de oro intacta:
@@ -194,6 +196,10 @@ function setMyProductHubCategories(req, res) {
         const ctx = req.hubContext;
         try {
             const productId = String(req.params.productId);
+            // BUSINESS_VIEWER (con permiso de catálogo): solo productos de SU negocio.
+            if (ctx.role === "BUSINESS_VIEWER") {
+                yield assertProductBelongsToBusiness(String(ctx.businessId || ""), productId);
+            }
             const raw = (req.body || {}).hubCategoryIds;
             if (!Array.isArray(raw)) {
                 return res.status(400).json({
@@ -302,6 +308,65 @@ function createMyBusinessCategory(req, res) {
         }
         catch (error) {
             return upstreamError(res, error, "crear la categoría");
+        }
+    });
+}
+/** Candado: la categoría debe ser del negocio (products acota por x-business-id; aquí se valida además). */
+function assertCategoryBelongsToBusiness(businessId, categoryId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let categories = [];
+        try {
+            categories = yield (0, productsService_external_1.listBusinessCategoriesExternal)(businessId);
+        }
+        catch (_a) {
+            categories = [];
+        }
+        if (!categories.some((c) => String(c === null || c === void 0 ? void 0 : c._id) === String(categoryId))) {
+            const err = new Error("category_not_in_business");
+            err.response = {
+                status: 403,
+                data: { status: false, statusCode: 403, message: "La categoría no pertenece a este negocio", data: {} },
+            };
+            throw err;
+        }
+    });
+}
+/** PATCH /api/hubs/me/businesses/:businessId/categories/:categoryId (multipart: 'image' opcional) */
+function updateMyBusinessCategory(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const ctx = req.hubContext;
+        try {
+            const businessId = String(req.params.businessId);
+            const categoryId = String(req.params.categoryId);
+            yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, businessId);
+            yield assertCategoryBelongsToBusiness(businessId, categoryId);
+            const files = Array.isArray(req.files) ? req.files : [];
+            const fields = passThroughBody(req.body);
+            if (Object.keys(fields).length === 0 && files.length === 0) {
+                return res.status(400).json({ status: false, statusCode: 400, message: "Nada que actualizar", data: {} });
+            }
+            const data = yield (0, productsService_external_1.updateBusinessCategoryExternal)(businessId, categoryId, fields, files);
+            return res.status(200).json(data);
+        }
+        catch (error) {
+            return upstreamError(res, error, "actualizar la categoría");
+        }
+    });
+}
+/** DELETE /api/hubs/me/businesses/:businessId/categories/:categoryId */
+function deleteMyBusinessCategory(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const ctx = req.hubContext;
+        try {
+            const businessId = String(req.params.businessId);
+            const categoryId = String(req.params.categoryId);
+            yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, businessId);
+            yield assertCategoryBelongsToBusiness(businessId, categoryId);
+            const data = yield (0, productsService_external_1.deleteBusinessCategoryExternal)(businessId, categoryId);
+            return res.status(200).json(data);
+        }
+        catch (error) {
+            return upstreamError(res, error, "eliminar la categoría");
         }
     });
 }

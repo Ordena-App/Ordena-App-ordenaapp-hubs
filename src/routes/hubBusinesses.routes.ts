@@ -8,6 +8,7 @@ import {
     updateMyHubBusinessInfo,
     uploadMyHubBusinessLogo,
     updateMyHubBusinessHours,
+    updateMyPortalBusinessEta,
 } from "../controllers/hubBusinesses.controller";
 import { verifyHubJWT, requireHubRole } from "../utils/auth";
 
@@ -86,6 +87,14 @@ router.patch(
     verifyHubJWT,
     requireHubRole("HUB_OWNER", "HUB_ADMIN", "HUB_STAFF"),
     updateBusinessOperationalStatus
+);
+
+// Portal del negocio: tiempo estimado de entrega (solo si el hub lo permite).
+router.patch(
+    "/me/portal/business/eta",
+    verifyHubJWT,
+    requireHubRole("BUSINESS_VIEWER"),
+    updateMyPortalBusinessEta
 );
 
 export default router;

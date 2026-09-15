@@ -3,26 +3,12 @@ import hubModel from "../models/hubModel";
 import hubSettlementModel from "../models/hubSettlementModel";
 import { getHubSettlementLines, } from "../services/ordersService.external";
 import { getBusinessesByHubId, assertBusinessBelongsToHub } from "../services/businessService.external";
+import { detectPeriodFrequency, periodRangeInTz, round2 } from "../utils/settlementPeriods";
 
-/**
- * Mes calendario [inicio, fin] expresado en UTC para una zona horaria dada.
- * Los pedidos se guardan en UTC; el corte del mes debe ser el del HUB (que el
- * pedido de las 11pm del 31 caiga en el mes que el operador vive, no en UTC).
- */
-function monthRangeInTz(period: string, tz: string): { start: Date; end: Date } {
-    const [y, m] = period.split("-").map((n) => parseInt(n, 10));
-    // Offset de la zona en ese momento (técnica estándar sin librerías de TZ)
-    const offsetAt = (utcGuess: Date): number => {
-        const local = new Date(utcGuess.toLocaleString("en-US", { timeZone: tz }));
-        const utc = new Date(utcGuess.toLocaleString("en-US", { timeZone: "UTC" }));
-        return utc.getTime() - local.getTime();
-    };
-    const startGuess = new Date(Date.UTC(y, m - 1, 1));
-    const endGuess = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1));
-    const start = new Date(startGuess.getTime() + offsetAt(startGuess));
-    const end = new Date(endGuess.getTime() + offsetAt(endGuess) - 1);
-    return { start, end };
-}
+// Los helpers de período viven en utils/settlementPeriods (compartidos con la
+// liquidación de repartidores). Se re-exportan para no romper imports previos.
+export { detectPeriodFrequency } from "../utils/settlementPeriods";
+export type { SettlementFrequency } from "../utils/settlementPeriods";
 
 function resolveCommission(
     hub: any,
@@ -37,13 +23,12 @@ function resolveCommission(
     return { type, value };
 }
 
-function round2(n: number): number {
-    return Math.round(n * 100) / 100;
-}
-
 /**
  * POST /api/hubs/me/settlements/generate  (HUB_OWNER / HUB_ADMIN)
- * Body: { period: 'YYYY-MM', businessId? }.
+ * Body: { period, businessId? } — period según la frecuencia del hub:
+ * YYYY-MM-DD (diaria) · YYYY-Www (semanal, lunes a domingo) · YYYY-MM-Q1|Q2
+ * (quincenal) · YYYY-MM (mensual). Cualquier formato válido se acepta, así una
+ * liquidación mensual antigua se puede regenerar aunque el hub ya corte semanal.
  * Genera (o RE-genera, mientras no esté PAID) la liquidación del período para
  * un negocio o para todos los del hub. La cifra sale de re-contar orders
  * (entregados y pagados); la comisión, del override del negocio o del default.
@@ -52,8 +37,13 @@ export async function generateMySettlements(req: Request, res: Response): Promis
     const ctx = req.hubContext!;
     try {
         const period = String(req.body?.period || "").trim();
-        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
-            return res.status(400).json({ status: false, statusCode: 400, message: "period debe ser YYYY-MM", data: {} });
+        if (!detectPeriodFrequency(period)) {
+            return res.status(400).json({
+                status: false,
+                statusCode: 400,
+                message: "period inválido: usa YYYY-MM-DD (diario), YYYY-Www (semanal), YYYY-MM-Q1|Q2 (quincenal) o YYYY-MM (mensual)",
+                data: {},
+            });
         }
         const requestedBusinessId = req.body?.businessId ? String(req.body.businessId) : null;
 
@@ -64,7 +54,7 @@ export async function generateMySettlements(req: Request, res: Response): Promis
         if (!hub) {
             return res.status(404).json({ status: false, statusCode: 404, message: "Hub no encontrado", data: {} });
         }
-        const { start, end } = monthRangeInTz(period, hub.timezone || "America/El_Salvador");
+        const { start, end, frequency } = periodRangeInTz(period, hub.timezone || "America/El_Salvador");
 
         // Universo de negocios a liquidar
         let businesses: Array<{ _id: string; name?: string }> = [];
@@ -109,6 +99,7 @@ export async function generateMySettlements(req: Request, res: Response): Promis
                 {
                     $set: {
                         businessName: biz.name || null,
+                        frequency,
                         periodStart: start,
                         periodEnd: end,
                         ordersCount,

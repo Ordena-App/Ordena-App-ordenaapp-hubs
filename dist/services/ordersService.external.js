@@ -16,7 +16,10 @@ exports.getHubOrders = getHubOrders;
 exports.getHubOrdersSummary = getHubOrdersSummary;
 exports.updateHubOrderStatus = updateHubOrderStatus;
 exports.notifyDeliveryPersonExternal = notifyDeliveryPersonExternal;
+exports.hubOrderFlowExternal = hubOrderFlowExternal;
+exports.getDriverOrdersExternal = getDriverOrdersExternal;
 exports.getHubSettlementLines = getHubSettlementLines;
+exports.getDriverSettlementLines = getDriverSettlementLines;
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("../config/config");
 // Server-to-server hacia orders-service (endpoints /internal/hub/* con secreto
@@ -35,10 +38,10 @@ function getHubOrders(hubId, query) {
         return data;
     });
 }
-function getHubOrdersSummary(hubId, from, to, businessId) {
-    return __awaiter(this, void 0, void 0, function* () {
+function getHubOrdersSummary(hubId_1, from_1, to_1, businessId_1) {
+    return __awaiter(this, arguments, void 0, function* (hubId, from, to, businessId, excludePendingConfirmation = false) {
         const { data } = yield axios_1.default.get(`${config_1.ORDERS_SERVICE_LINK}/internal/hub/${hubId}/summary`, {
-            params: { from, to, businessId },
+            params: Object.assign({ from, to, businessId }, (excludePendingConfirmation ? { excludePendingConfirmation: "1" } : {})),
             timeout: 15000,
             headers: headers(),
         });
@@ -62,6 +65,23 @@ function notifyDeliveryPersonExternal(businessId, orderId) {
         return data;
     });
 }
+function hubOrderFlowExternal(hubId, orderId, body) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.post(`${config_1.ORDERS_SERVICE_LINK}/internal/hub/${hubId}/orders/${orderId}/flow`, body, { timeout: 15000, headers: headers() });
+        return data;
+    });
+}
+/** Pedidos para la app del repartidor: bolsa (pool), los suyos (mine) o entregados (history). */
+function getDriverOrdersExternal(hubId, driverId, scope) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.ORDERS_SERVICE_LINK}/internal/hub/${hubId}/driver-orders`, {
+            params: { driverId, scope },
+            timeout: 15000,
+            headers: headers(),
+        });
+        return data;
+    });
+}
 /** Lineas de liquidacion (F4): pedidos entregados+pagados del periodo, sin PII. */
 function getHubSettlementLines(hubId, businessId, from, to) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -69,6 +89,20 @@ function getHubSettlementLines(hubId, businessId, from, to) {
             timeout: 30000,
             headers: headers(),
             params: { businessId, from, to },
+        });
+        return data;
+    });
+}
+/**
+ * Entregas de UN repartidor (delivery_assignment delivered) entre from y to,
+ * con lo que cobró al cliente en cada una. Base de su liquidación y de "Mi cuenta".
+ */
+function getDriverSettlementLines(hubId, driverId, from, to) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { data } = yield axios_1.default.get(`${config_1.ORDERS_SERVICE_LINK}/internal/hub/${hubId}/driver-settlement-lines`, {
+            timeout: 30000,
+            headers: headers(),
+            params: { driverId, from, to },
         });
         return data;
     });

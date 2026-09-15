@@ -12,6 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.detectPeriodFrequency = void 0;
 exports.generateMySettlements = generateMySettlements;
 exports.listMySettlements = listMySettlements;
 exports.getMySettlementDetail = getMySettlementDetail;
@@ -21,25 +22,11 @@ const hubModel_1 = __importDefault(require("../models/hubModel"));
 const hubSettlementModel_1 = __importDefault(require("../models/hubSettlementModel"));
 const ordersService_external_1 = require("../services/ordersService.external");
 const businessService_external_1 = require("../services/businessService.external");
-/**
- * Mes calendario [inicio, fin] expresado en UTC para una zona horaria dada.
- * Los pedidos se guardan en UTC; el corte del mes debe ser el del HUB (que el
- * pedido de las 11pm del 31 caiga en el mes que el operador vive, no en UTC).
- */
-function monthRangeInTz(period, tz) {
-    const [y, m] = period.split("-").map((n) => parseInt(n, 10));
-    // Offset de la zona en ese momento (técnica estándar sin librerías de TZ)
-    const offsetAt = (utcGuess) => {
-        const local = new Date(utcGuess.toLocaleString("en-US", { timeZone: tz }));
-        const utc = new Date(utcGuess.toLocaleString("en-US", { timeZone: "UTC" }));
-        return utc.getTime() - local.getTime();
-    };
-    const startGuess = new Date(Date.UTC(y, m - 1, 1));
-    const endGuess = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1));
-    const start = new Date(startGuess.getTime() + offsetAt(startGuess));
-    const end = new Date(endGuess.getTime() + offsetAt(endGuess) - 1);
-    return { start, end };
-}
+const settlementPeriods_1 = require("../utils/settlementPeriods");
+// Los helpers de período viven en utils/settlementPeriods (compartidos con la
+// liquidación de repartidores). Se re-exportan para no romper imports previos.
+var settlementPeriods_2 = require("../utils/settlementPeriods");
+Object.defineProperty(exports, "detectPeriodFrequency", { enumerable: true, get: function () { return settlementPeriods_2.detectPeriodFrequency; } });
 function resolveCommission(hub, businessId) {
     const override = (hub.commissionOverrides || []).find((o) => String(o.businessId) === String(businessId));
     const cfg = override || hub.settlementConfig || {};
@@ -47,12 +34,12 @@ function resolveCommission(hub, businessId) {
     const value = typeof cfg.commissionValue === "number" && cfg.commissionValue >= 0 ? cfg.commissionValue : 0;
     return { type, value };
 }
-function round2(n) {
-    return Math.round(n * 100) / 100;
-}
 /**
  * POST /api/hubs/me/settlements/generate  (HUB_OWNER / HUB_ADMIN)
- * Body: { period: 'YYYY-MM', businessId? }.
+ * Body: { period, businessId? } — period según la frecuencia del hub:
+ * YYYY-MM-DD (diaria) · YYYY-Www (semanal, lunes a domingo) · YYYY-MM-Q1|Q2
+ * (quincenal) · YYYY-MM (mensual). Cualquier formato válido se acepta, así una
+ * liquidación mensual antigua se puede regenerar aunque el hub ya corte semanal.
  * Genera (o RE-genera, mientras no esté PAID) la liquidación del período para
  * un negocio o para todos los del hub. La cifra sale de re-contar orders
  * (entregados y pagados); la comisión, del override del negocio o del default.
@@ -63,8 +50,13 @@ function generateMySettlements(req, res) {
         const ctx = req.hubContext;
         try {
             const period = String(((_a = req.body) === null || _a === void 0 ? void 0 : _a.period) || "").trim();
-            if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
-                return res.status(400).json({ status: false, statusCode: 400, message: "period debe ser YYYY-MM", data: {} });
+            if (!(0, settlementPeriods_1.detectPeriodFrequency)(period)) {
+                return res.status(400).json({
+                    status: false,
+                    statusCode: 400,
+                    message: "period inválido: usa YYYY-MM-DD (diario), YYYY-Www (semanal), YYYY-MM-Q1|Q2 (quincenal) o YYYY-MM (mensual)",
+                    data: {},
+                });
             }
             const requestedBusinessId = ((_b = req.body) === null || _b === void 0 ? void 0 : _b.businessId) ? String(req.body.businessId) : null;
             const hub = yield hubModel_1.default
@@ -74,7 +66,7 @@ function generateMySettlements(req, res) {
             if (!hub) {
                 return res.status(404).json({ status: false, statusCode: 404, message: "Hub no encontrado", data: {} });
             }
-            const { start, end } = monthRangeInTz(period, hub.timezone || "America/El_Salvador");
+            const { start, end, frequency } = (0, settlementPeriods_1.periodRangeInTz)(period, hub.timezone || "America/El_Salvador");
             // Universo de negocios a liquidar
             let businesses = [];
             if (requestedBusinessId) {
@@ -102,19 +94,20 @@ function generateMySettlements(req, res) {
                 }
                 const linesResp = yield (0, ordersService_external_1.getHubSettlementLines)(ctx.hubId, biz._id, start.toISOString(), end.toISOString());
                 const data = (linesResp === null || linesResp === void 0 ? void 0 : linesResp.data) || {};
-                const grossSales = round2(Number(data.grossSales) || 0);
+                const grossSales = (0, settlementPeriods_1.round2)(Number(data.grossSales) || 0);
                 const ordersCount = Number(data.ordersCount) || 0;
                 const commission = resolveCommission(hub, biz._id);
                 let commissionAmount = 0;
                 if (commission.type === "percent")
-                    commissionAmount = round2((grossSales * commission.value) / 100);
+                    commissionAmount = (0, settlementPeriods_1.round2)((grossSales * commission.value) / 100);
                 else if (commission.type === "fixed")
-                    commissionAmount = round2(ordersCount * commission.value);
-                const netPayable = round2(grossSales - commissionAmount);
+                    commissionAmount = (0, settlementPeriods_1.round2)(ordersCount * commission.value);
+                const netPayable = (0, settlementPeriods_1.round2)(grossSales - commissionAmount);
                 const now = new Date();
                 const doc = yield hubSettlementModel_1.default.findOneAndUpdate({ hubId: ctx.hubId, businessId: biz._id, period, status: { $ne: "PAID" } }, {
                     $set: {
                         businessName: biz.name || null,
+                        frequency,
                         periodStart: start,
                         periodEnd: end,
                         ordersCount,

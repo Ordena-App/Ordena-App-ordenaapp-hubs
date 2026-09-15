@@ -50,6 +50,19 @@ function stripOrderPII(order, visibility) {
     // El WhatsApp del repartidor del hub es interno del operador: el negocio
     // nunca debe verlo, sin importar la matriz de privacidad.
     clean.delivery_notified_to = null;
+    // Del flujo de entrega el negocio ve el avance y quién lo lleva, no la
+    // auditoría interna del hub (quién publicó/asignó/reasignó y por qué).
+    const assignment = order.delivery_assignment;
+    if (assignment) {
+        clean.delivery_assignment = {
+            status: assignment.status || "none",
+            driver_name: assignment.driver_name || null,
+            assigned_at: assignment.assigned_at || null,
+            picked_up_at: assignment.picked_up_at || null,
+            on_the_way_at: assignment.on_the_way_at || null,
+            delivered_at: assignment.delivered_at || null,
+        };
+    }
     const shipTo = Object.assign({}, order.ship_to);
     const payment = Object.assign({}, order.payment);
     if (!visibility.customerName) {
@@ -114,14 +127,9 @@ function getMyHubOrders(req, res) {
                     data: {},
                 });
             }
-            const resp = yield (0, ordersService_external_1.getHubOrders)(ctx.hubId, {
-                page: Number(req.query.page) || 1,
-                limit: Number(req.query.limit) || 20,
-                businessId: scoped || undefined,
-                status: typeof req.query.status === "string" ? req.query.status : undefined,
-                from: typeof req.query.from === "string" ? req.query.from : undefined,
-                to: typeof req.query.to === "string" ? req.query.to : undefined,
-            });
+            const resp = yield (0, ordersService_external_1.getHubOrders)(ctx.hubId, Object.assign(Object.assign(Object.assign(Object.assign({ page: Number(req.query.page) || 1, limit: Number(req.query.limit) || 20, businessId: scoped || undefined, status: typeof req.query.status === "string" ? req.query.status : undefined, from: typeof req.query.from === "string" ? req.query.from : undefined, to: typeof req.query.to === "string" ? req.query.to : undefined, 
+                // Búsqueda por número visible o ID del pedido.
+                q: typeof req.query.q === "string" && req.query.q.trim() ? req.query.q.trim() : undefined }, (ctx.role !== "BUSINESS_VIEWER" && typeof req.query.confirmation === "string" ? { confirmation: req.query.confirmation } : {})), (ctx.role !== "BUSINESS_VIEWER" && typeof req.query.assignment === "string" ? { assignment: req.query.assignment } : {})), (ctx.role !== "BUSINESS_VIEWER" && typeof req.query.driverId === "string" ? { driverId: req.query.driverId } : {})), (ctx.role === "BUSINESS_VIEWER" ? { excludePendingConfirmation: "1" } : {})));
             // El Portal Business solo recibe los datos del cliente que el hub decide
             // compartir. Los roles del hub ven todo (son los dueños de la operación).
             if (ctx.role === "BUSINESS_VIEWER") {
@@ -183,6 +191,7 @@ function updateMyHubOrderStatus(req, res) {
  */
 function getMyBusinessPortalSummary(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c;
         const ctx = req.hubContext;
         try {
             const requested = typeof req.query.businessId === "string" ? req.query.businessId : undefined;
@@ -199,8 +208,9 @@ function getMyBusinessPortalSummary(req, res) {
             const business = yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, businessId);
             const from = typeof req.query.from === "string" ? req.query.from : undefined;
             const to = typeof req.query.to === "string" ? req.query.to : undefined;
-            const summaryResp = yield (0, ordersService_external_1.getHubOrdersSummary)(ctx.hubId, from, to, businessId);
+            const summaryResp = yield (0, ordersService_external_1.getHubOrdersSummary)(ctx.hubId, from, to, businessId, ctx.role === "BUSINESS_VIEWER");
             const summary = (summaryResp === null || summaryResp === void 0 ? void 0 : summaryResp.data) || { totalOrders: 0, totalSales: 0, byStatus: [], topProducts: [] };
+            const hubDoc = yield hubModel_1.default.findById(ctx.hubId).select("fulfillment").lean();
             return res.status(200).json({
                 status: true,
                 statusCode: 200,
@@ -210,8 +220,13 @@ function getMyBusinessPortalSummary(req, res) {
                         _id: business._id,
                         name: business.name,
                         hubSlug: business.hubSlug,
+                        // Slug público real ({hubSlug}--{sufijo}): el portal arma con él el link al ticket térmico.
+                        store_link: business.store_link,
                         image_url: business.image_url,
                         operationalStatus: business.operationalStatus || "active",
+                        estimated_delivery_minutes: (_b = (_a = business.delivery_options) === null || _a === void 0 ? void 0 : _a.estimated_delivery_minutes) !== null && _b !== void 0 ? _b : null,
+                        // El hub decide si cada negocio edita su tiempo estimado desde el portal.
+                        canEditEta: ((_c = hubDoc === null || hubDoc === void 0 ? void 0 : hubDoc.fulfillment) === null || _c === void 0 ? void 0 : _c.businessesEditEta) === true,
                     },
                     summary,
                 },

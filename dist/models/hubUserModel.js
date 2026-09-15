@@ -8,11 +8,18 @@ const hubUserSchema = new mongoose_1.Schema({
     password: { type: String, required: true }, // bcrypt hash
     role: {
         type: String,
-        enum: ["HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"],
+        enum: ["HUB_OWNER", "HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER", "DELIVERY_DRIVER"],
         default: "HUB_STAFF",
     },
     // Solo aplica (y es requerido) cuando role === 'BUSINESS_VIEWER'
     business_id: { type: String, default: null },
+    // Teléfono de contacto (repartidores): para que el hub lo ubique. Opcional.
+    phone: { type: String, default: null },
+    // Permisos finos del BUSINESS_VIEWER (los concede/quita el hub desde Usuarios).
+    permissions: {
+        // Crear/editar/borrar productos y categorías de SU negocio desde el portal.
+        manageCatalog: { type: Boolean, default: false },
+    },
     status: { type: String, enum: ["ACTIVE", "SUSPENDED"], default: "ACTIVE" },
     password_reset_token_hash: { type: String, default: null },
     password_reset_expires_at: { type: Date, default: null },

@@ -114,12 +114,47 @@ const hubSchema = new mongoose_1.Schema({
         //   'distance' → base + precio/km desde la ubicación de cada negocio
         //                hasta el pin del cliente (ruta real con fallback).
         pricingMode: { type: String, enum: ["flat", "distance"], default: "flat" },
+        // Efectivo contra entrega en el checkout de todos los negocios
+        // (se propaga a payment_methods.cash; la pantalla de pago lo exige).
+        cashOnDelivery: { type: Boolean, default: true },
+        // Si cada negocio puede fijar su tiempo estimado de entrega desde su
+        // portal. Apagado = lo pone el hub por negocio (Negocios → Información).
+        businessesEditEta: { type: Boolean, default: false },
         distance: {
             base_fee: { type: Number, default: 0 },
             included_km: { type: Number, default: 0 },
             price_per_km: { type: Number, default: 0 },
             max_distance_km: { type: Number, default: null },
         },
+    },
+    // Comprobante de pago en métodos manuales (Yape, transferencia…) de TODOS
+    // sus negocios: si la pantalla de pago pide adjuntarlo y a quién va el aviso
+    // de WhatsApp después ('hub' = número del hub, 'business' = el del negocio,
+    // 'none' = sin aviso). Se propaga a payment_proof de cada negocio.
+    paymentFlow: {
+        requireProof: { type: Boolean, default: true },
+        notifyTarget: { type: String, enum: ["hub", "business", "none"], default: "hub" },
+    },
+    // ---- Flujo del pedido (Sprint 3) ----
+    // hubConfirms: el hub confirma cada pedido ANTES de que el negocio lo vea y
+    // reciba su WhatsApp (apagado = flujo directo, como SaaS/WL).
+    // autoPublishOnConfirm: al confirmar, el pedido de delivery entra solo a la
+    // bolsa de repartidores (el hub puede desmarcarlo pedido a pedido).
+    // notifyCustomerOnConfirm (Sprint 4): aviso al cliente por WhatsApp con el
+    // tiempo estimado del negocio al confirmar el pedido (plantilla
+    // pedido_confirmado_cliente_es). Se propaga a orders vía notification-config.
+    // Costo por mensaje de Meta considerado en el plan; default encendido.
+    orderFlow: {
+        hubConfirms: { type: Boolean, default: false },
+        autoPublishOnConfirm: { type: Boolean, default: true },
+        notifyCustomerOnConfirm: { type: Boolean, default: true },
+    },
+    // Qué datos del cliente ve el REPARTIDOR en su app. Dirección, referencia y
+    // pin van siempre (los necesita para entregar); el teléfono va apagado por
+    // defecto: el repartidor navega al pin exacto sin llamar al cliente.
+    driverVisibility: {
+        customerName: { type: Boolean, default: true },
+        customerPhone: { type: Boolean, default: false },
     },
     // Zona horaria del hub: cálculos de apertura, estadísticas y rotación de
     // métricas la respetan. Cada Business mantiene además su propio horario.
@@ -151,6 +186,10 @@ const hubSchema = new mongoose_1.Schema({
     settlementConfig: {
         commissionType: { type: String, enum: ["percent", "fixed", "none"], default: "percent" },
         commissionValue: { type: Number, default: 0 },
+        // Frecuencia de corte de las liquidaciones. Define el formato del período:
+        // daily YYYY-MM-DD · weekly YYYY-Www (lunes a domingo) · biweekly YYYY-MM-Q1|Q2
+        // (1–15 y 16–fin de mes) · monthly YYYY-MM. Cambiarla no toca lo ya generado.
+        frequency: { type: String, enum: ["daily", "weekly", "biweekly", "monthly"], default: "monthly" },
     },
     commissionOverrides: {
         type: [
@@ -158,6 +197,29 @@ const hubSchema = new mongoose_1.Schema({
                 businessId: { type: String, required: true },
                 commissionType: { type: String, enum: ["percent", "fixed", "none"], default: "percent" },
                 commissionValue: { type: Number, default: 0 },
+            }, { _id: false }),
+        ],
+        default: [],
+    },
+    // ---- Liquidación de repartidores (Sprint 5): lo que el hub paga por entrega ----
+    // fixed = monto fijo por entrega; percent = % del costo de envío o del total
+    // del pedido (percentBase); none = sin comisión. La frecuencia define el corte
+    // de las liquidaciones de repartidores (independiente de la de negocios).
+    // Hubs sin esta config se comportan como fixed 0 (sin comisión) y corte diario.
+    driverPayConfig: {
+        commissionType: { type: String, enum: ["fixed", "percent", "none"], default: "fixed" },
+        commissionValue: { type: Number, default: 0 },
+        percentBase: { type: String, enum: ["delivery_cost", "order_total"], default: "delivery_cost" },
+        frequency: { type: String, enum: ["daily", "weekly", "biweekly", "monthly"], default: "daily" },
+    },
+    // Excepciones POR REPARTIDOR (a unos les paga distinto). driverId = _id de hub_users.
+    driverCommissionOverrides: {
+        type: [
+            new mongoose_1.Schema({
+                driverId: { type: String, required: true },
+                commissionType: { type: String, enum: ["fixed", "percent", "none"], default: "fixed" },
+                commissionValue: { type: Number, default: 0 },
+                percentBase: { type: String, enum: ["delivery_cost", "order_total"], default: "delivery_cost" },
             }, { _id: false }),
         ],
         default: [],

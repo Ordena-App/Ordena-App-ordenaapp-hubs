@@ -43,6 +43,26 @@ export interface CreateHubBusinessPayload {
     default_delivery_location?: { state?: string | null; stateIso?: string | null; city?: string | null };
     /** fulfillment del hub: métodos de entrega y tarifa con los que nace el checkout. */
     fulfillment?: HubFulfillmentPayload;
+    /** paymentFlow del hub: comprobante de pago y destinatario del aviso. */
+    payment_flow?: HubPaymentFlowPayload;
+}
+
+export interface HubPaymentFlowPayload {
+    enabled: boolean;
+    notify_target: "hub" | "business" | "none";
+    /** WhatsApp del hub (solo dígitos) al que va el aviso cuando notify_target = 'hub'. */
+    hub_whatsapp: string | null;
+}
+
+/** hub.paymentFlow + hub.contact.whatsapp → payload de business (siembra y propagación). */
+export function buildHubPaymentFlowPayload(hub: any): HubPaymentFlowPayload {
+    const target = ["hub", "business", "none"].includes(hub?.paymentFlow?.notifyTarget) ? hub.paymentFlow.notifyTarget : "hub";
+    const digits = String(hub?.contact?.whatsapp || "").replace(/\D/g, "");
+    return {
+        enabled: hub?.paymentFlow?.requireProof !== false,
+        notify_target: target,
+        hub_whatsapp: digits.length >= 7 ? digits : null,
+    };
 }
 
 export interface HubFulfillmentPayload {
@@ -51,6 +71,8 @@ export interface HubFulfillmentPayload {
     deliveryFee: number;
     pricingMode: "flat" | "distance";
     distance: { base_fee: number; included_km: number; price_per_km: number; max_distance_km: number | null };
+    /** Efectivo contra entrega → payment_methods.cash de cada negocio. */
+    cashOnDelivery: boolean;
 }
 
 /**
@@ -71,6 +93,7 @@ export function buildHubFulfillmentPayload(raw: any): HubFulfillmentPayload {
             price_per_km: num(raw?.distance?.price_per_km, 0),
             max_distance_km: typeof maxRaw === "number" && Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : null,
         },
+        cashOnDelivery: raw?.cashOnDelivery !== false,
     };
 }
 
@@ -209,6 +232,16 @@ export async function propagateHubDeliveryDefaultsExternal(
 export async function propagateHubFulfillmentExternal(hubId: string, body: HubFulfillmentPayload) {
     const { data } = await axios.patch(
         `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/fulfillment`,
+        body,
+        { timeout: 20000, headers: internalHeaders() }
+    );
+    return data;
+}
+
+/** Propaga el flujo de comprobante de pago del hub a payment_proof de TODOS sus negocios. */
+export async function propagateHubPaymentFlowExternal(hubId: string, body: HubPaymentFlowPayload) {
+    const { data } = await axios.patch(
+        `${BUSINESS_SERVICE_LINK}/businesses/hub/${hubId}/payment-flow`,
         body,
         { timeout: 20000, headers: internalHeaders() }
     );

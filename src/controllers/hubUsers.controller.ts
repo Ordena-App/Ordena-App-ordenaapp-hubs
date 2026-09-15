@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
+import { HUB_SELF_SERVE_SIGNUP } from "../config/config";
 import hubModel from "../models/hubModel";
 import hubUserModel, { HubUserRole } from "../models/hubUserModel";
 import { signHubToken } from "../utils/auth";
@@ -17,6 +18,14 @@ const SALT_ROUNDS = 10;
  */
 export async function registerHubWithOwner(req: Request, res: Response): Promise<Response> {
     try {
+        if (!HUB_SELF_SERVE_SIGNUP) {
+            return res.status(403).json({
+                status: false,
+                statusCode: 403,
+                message: "La creación de hubs no es autoservicio. Escríbenos y lo activamos contigo.",
+                data: {},
+            });
+        }
         const { hubName, slug: rawSlug, country, currency, email, password, name, timezone, language } = req.body || {};
 
         if (!hubName || !country || !currency || !email || !password) {
@@ -147,7 +156,7 @@ export async function loginHubUser(req: Request, res: Response): Promise<Respons
         // WhatsApp del repartidor, y encima se cachea en su localStorage.
         const hubQuery = hubModel.findById(user.hub_id);
         const hub =
-            user.role === "BUSINESS_VIEWER"
+            user.role === "BUSINESS_VIEWER" || user.role === "DELIVERY_DRIVER"
                 ? await hubQuery.select("name slug logo favicon branding timezone country currency language status")
                 : await hubQuery;
         if (!hub || hub.status !== "ACTIVE") {
@@ -173,6 +182,8 @@ export async function loginHubUser(req: Request, res: Response): Promise<Respons
             email: user.email,
             role: user.role,
             business_id: user.business_id || null,
+            phone: (user as any).phone || null,
+            permissions: { manageCatalog: (user as any).permissions?.manageCatalog === true },
         };
         return res.status(200).json({
             status: true,
@@ -200,6 +211,8 @@ export async function createHubUser(req: Request, res: Response): Promise<Respon
     try {
         const ctx = req.hubContext!;
         const { email, password, name, role, businessId } = req.body || {};
+        // Teléfono opcional (repartidores): solo dígitos y '+', acotado.
+        const phoneRaw = typeof req.body?.phone === "string" ? req.body.phone.replace(/[^\d+]/g, "").slice(0, 20) : "";
 
         const hubForLock: any = await hubModel.findById(ctx.hubId).select("subscription.pastDueSince").lean();
         // Mora >= 15 días: se bloquea SOLO crear (negocios/usuarios) — la
@@ -214,12 +227,12 @@ export async function createHubUser(req: Request, res: Response): Promise<Respon
             });
         }
 
-        const allowedRoles: HubUserRole[] = ["HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER"];
+        const allowedRoles: HubUserRole[] = ["HUB_ADMIN", "HUB_STAFF", "BUSINESS_VIEWER", "DELIVERY_DRIVER"];
         if (!email || !password || !role || !allowedRoles.includes(role)) {
             return res.status(400).json({
                 status: false,
                 statusCode: 400,
-                message: "email, password y role (HUB_ADMIN | HUB_STAFF | BUSINESS_VIEWER) son requeridos",
+                message: "email, password y role (HUB_ADMIN | HUB_STAFF | BUSINESS_VIEWER | DELIVERY_DRIVER) son requeridos",
                 data: {},
             });
         }
@@ -265,9 +278,22 @@ export async function createHubUser(req: Request, res: Response): Promise<Respon
             password: hashed,
             role,
             business_id: role === "BUSINESS_VIEWER" ? String(businessId) : null,
+            phone: phoneRaw.length >= 6 ? phoneRaw : null,
+            permissions: {
+                manageCatalog:
+                    role === "BUSINESS_VIEWER" && (req.body?.manageCatalog === true || req.body?.manageCatalog === "true"),
+            },
         });
 
-        const safeUser = { _id: user._id, name: user.name, email: user.email, role: user.role, business_id: user.business_id };
+        const safeUser = {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            business_id: user.business_id,
+            phone: (user as any).phone || null,
+            permissions: { manageCatalog: (user as any).permissions?.manageCatalog === true },
+        };
         return res.status(201).json({
             status: true,
             statusCode: 201,
@@ -411,6 +437,73 @@ export async function changeMyHubPassword(req: Request, res: Response): Promise<
         return res.status(200).json({ status: true, statusCode: 200, message: "Contraseña actualizada", data: {} });
     } catch (error: any) {
         console.error("Error en changeMyHubPassword:", error);
+        return res.status(500).json({ status: false, statusCode: 500, message: "Error interno del servidor", data: {} });
+    }
+}
+
+/** GET /hub-users/me — usuario de la sesión (para refrescar permisos sin re-login). */
+export async function getMyHubUser(req: Request, res: Response): Promise<Response> {
+    try {
+        const ctx = req.hubContext!;
+        const user: any = await hubUserModel
+            .findOne({ _id: ctx.userId, hub_id: ctx.hubId })
+            .select("-password -password_reset_token_hash -password_reset_expires_at")
+            .lean();
+        if (!user || user.status !== "ACTIVE") {
+            return res.status(401).json({ status: false, statusCode: 401, message: "Sesión inválida", data: {} });
+        }
+        return res.status(200).json({
+            status: true,
+            statusCode: 200,
+            message: "Usuario de la sesión",
+            data: {
+                user: {
+                    _id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    role: user.role,
+                    business_id: user.business_id || null,
+                    phone: user.phone || null,
+                    permissions: { manageCatalog: user.permissions?.manageCatalog === true },
+                },
+            },
+        });
+    } catch (error) {
+        console.error("Error en getMyHubUser:", error);
+        return res.status(500).json({ status: false, statusCode: 500, message: "Error interno del servidor", data: {} });
+    }
+}
+
+/**
+ * PATCH /hub-users/:id/permissions  (HUB_OWNER / HUB_ADMIN)
+ * Body: { manageCatalog: boolean }. Solo aplica a usuarios BUSINESS_VIEWER del hub.
+ */
+export async function updateHubUserPermissions(req: Request, res: Response): Promise<Response> {
+    try {
+        const ctx = req.hubContext!;
+        const raw = req.body?.manageCatalog;
+        if (typeof raw !== "boolean" && raw !== "true" && raw !== "false") {
+            return res.status(400).json({ status: false, statusCode: 400, message: "manageCatalog (boolean) es requerido", data: {} });
+        }
+        const manageCatalog = raw === true || raw === "true";
+        const user = await hubUserModel.findOne({ _id: String(req.params.id), hub_id: ctx.hubId });
+        if (!user) {
+            return res.status(404).json({ status: false, statusCode: 404, message: "Usuario no encontrado", data: {} });
+        }
+        if (user.role !== "BUSINESS_VIEWER") {
+            return res.status(400).json({ status: false, statusCode: 400, message: "Este permiso solo aplica a usuarios del portal de negocio", data: {} });
+        }
+        user.permissions = { ...(user.permissions || {}), manageCatalog };
+        user.updated_at = new Date();
+        await user.save();
+        return res.status(200).json({
+            status: true,
+            statusCode: 200,
+            message: manageCatalog ? "Gestión de catálogo habilitada" : "Gestión de catálogo deshabilitada",
+            data: { user: { _id: user._id, permissions: { manageCatalog } } },
+        });
+    } catch (error) {
+        console.error("Error en updateHubUserPermissions:", error);
         return res.status(500).json({ status: false, statusCode: 500, message: "Error interno del servidor", data: {} });
     }
 }

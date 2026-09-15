@@ -1,4 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -6,9 +15,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.signHubToken = signHubToken;
 exports.verifyHubJWT = verifyHubJWT;
 exports.requireHubRole = requireHubRole;
+exports.requireCatalogAccess = requireCatalogAccess;
 exports.resolveScopedBusinessId = resolveScopedBusinessId;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const config_1 = require("../config/config");
+const hubUserModel_1 = __importDefault(require("../models/hubUserModel"));
 function extractId(value) {
     if (!value)
         return null;
@@ -83,6 +94,42 @@ function requireHubRole(...roles) {
         }
         return next();
     };
+}
+/**
+ * Acceso al catálogo (productos/categorías) de un negocio.
+ *  - Roles de hub indicados → igual que requireHubRole.
+ *  - BUSINESS_VIEWER → solo SU negocio (si la ruta trae :businessId debe ser el
+ *    suyo) y solo si el hub le concedió `permissions.manageCatalog`. El permiso se
+ *    lee de la DB en cada request: revocarlo aplica al instante aunque el JWT
+ *    siga vigente. En rutas sin :businessId el controller valida la pertenencia.
+ */
+function requireCatalogAccess(...roles) {
+    return (req, res, next) => __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
+        const ctx = req.hubContext;
+        const deny = (message) => res.status(403).json({ status: false, statusCode: 403, message, data: {} });
+        if (!ctx)
+            return deny("No tienes permisos para esta acción");
+        if (ctx.role === "BUSINESS_VIEWER") {
+            const requested = ((_a = req.params) === null || _a === void 0 ? void 0 : _a.businessId) ? String(req.params.businessId) : "";
+            if (!ctx.businessId || (requested && requested !== String(ctx.businessId))) {
+                return deny("Solo puedes gestionar el catálogo de tu negocio");
+            }
+            try {
+                const user = yield hubUserModel_1.default.findById(ctx.userId).select("permissions status").lean();
+                if (!user || user.status !== "ACTIVE" || ((_b = user.permissions) === null || _b === void 0 ? void 0 : _b.manageCatalog) !== true) {
+                    return deny("El hub no te ha habilitado la gestión del catálogo");
+                }
+            }
+            catch (_c) {
+                return deny("No se pudo validar el permiso");
+            }
+            return next();
+        }
+        if (!roles.includes(ctx.role))
+            return deny("No tienes permisos para esta acción");
+        return next();
+    });
 }
 /**
  * Regla de aislamiento del Portal Business: un BUSINESS_VIEWER solo puede

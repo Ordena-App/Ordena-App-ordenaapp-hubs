@@ -44,6 +44,7 @@ orders y payments usan `_LINK`. Setear la equivocada deja el default
 |---|---|---|
 | `INTERNAL_HUBS_SECRET` | el del §1 | ✅ |
 | `JWT_SECRET` | valor propio fuerte | ✅ **el default está en el repo — sin override cualquiera forja un token de HUB_OWNER** |
+| `HUB_SELF_SERVE_SIGNUP` | **no ponerla** (o `false`) | Registro público de hubs (`POST /hub-users/register`). Apagado por defecto: los hubs los crea Ordena tras lead → reunión → propuesta → acuerdo. Solo `true` si algún día se abre el autoservicio. En el frontend la pestaña "Crear mi hub" del login también está apagada salvo `NEXT_PUBLIC_HUB_SELF_SERVE_SIGNUP=true`. |
 | `BUSINESS_SERVICE_LINK` | `http://<business>:3002/api` | ✅ |
 | `ORDERS_SERVICE_LINK` | `http://<orders>:3005/api` | ✅ |
 | `PRODUCTS_SERVICE_LINK` | `http://<products>:3004/api` | ✅ |
@@ -210,6 +211,192 @@ Ambos scripts son idempotentes y solo añaden la key nueva (`FREE`/`BASIC`
 
 ---
 
+## 4c. Mongo: número de pedido por negocio (`orderNumber`) — orders
+
+Desde el Sprint 0 de F5 cada pedido nuevo recibe un número correlativo **por negocio**
+(`#1, #2, …`) con un contador atómico (`order_counters`). Los pedidos anteriores no lo
+tienen: el listado del negocio se los calcula por posición cronológica, pero el hub-admin,
+el ticket público y los WhatsApp mostraban un fragmento del `_id`. El backfill numera lo
+existente con **el mismo número que el negocio ya veía** y deja el contador al día.
+Idempotente: se puede correr varias veces. Correr **después** de deployar orders.
+
+```bash
+cd ordenaapp-orders && DRY_RUN=1 npx ts-node src/scripts/backfillOrderNumbers.ts   # solo reporta
+```
+
+```bash
+cd ordenaapp-orders && npx ts-node src/scripts/backfillOrderNumbers.ts            # aplica
+```
+
+Opcional: `npx ts-node src/scripts/backfillOrderNumbers.ts <businessId>` para un solo negocio.
+
+## 4d. Liquidaciones por frecuencia (Sprint 1)
+
+Cada hub elige en **Liquidaciones → Comisiones → Frecuencia de corte**: diaria, semanal
+(lunes a domingo), quincenal (1–15 y 16–fin de mes) o mensual. Se guarda en
+`hub.settlementConfig.frequency` (default `monthly`, así los hubs existentes no cambian).
+La clave del período depende de la frecuencia (`YYYY-MM-DD`, `YYYY-Www`, `YYYY-MM-Q1|Q2`,
+`YYYY-MM`) y el corte se calcula en la zona horaria del hub. Cambiar la frecuencia no toca
+lo ya generado. Sin migración: no hay nada que correr.
+
+**Catálogo autogestionado (portal del negocio):** el hub concede por usuario de portal el
+permiso "Gestiona su catálogo" (Usuarios → toggle en la fila, o casilla al crearlo). Con él,
+el negocio ve en su portal las pestañas Productos (mismo editor del hub: fotos, variantes,
+precio, stock, disponibilidad) y Categorías (propias de su tienda). El backend exige el
+permiso en cada request y lo acota a SU negocio; el hub sigue viendo y editando todo. Sin
+migración: los usuarios existentes quedan en solo lectura hasta que se les active.
+
+**Ticket térmico:** `/{store_link}/ordenes/{id}/ticket?w=58|80&print=1` (público, como el
+ticket web). Botones en el ticket web, en el detalle del pedido del dashboard, en el drawer
+del hub-admin y en el portal del negocio. Probar en una impresora real de 58 y otra de 80
+antes de darlo por cerrado (pedir modelo a Oe Ya).
+
+## 4e. Flujo del pedido y bolsa de repartidores (Sprint 3)
+
+Sin variables nuevas ni migraciones: los campos nuevos del pedido (`hub_confirmation`,
+`delivery_assignment`) nacen con el pedido y los índices los crea mongoose al arrancar
+orders. Orden de deploy: **orders → hubs → frontend**.
+
+**Interruptores del hub (Ajustes):**
+
+| Sección | Interruptor | Qué hace | Default |
+|---|---|---|---|
+| Flujo del pedido | El hub confirma los pedidos antes de pasarlos al negocio | El pedido nace “por confirmar”: solo lo ve el hub-admin, el negocio no lo ve en su portal ni recibe `pedido_negocio_hub_es` hasta que el hub lo confirma. Rechazar cancela el pedido y devuelve stock y cupón. | apagado |
+| Flujo del pedido | Publicar para repartidores al confirmar | Al confirmar, los pedidos de delivery entran solos a la bolsa (desmarcable pedido a pedido). | encendido |
+| Qué ve el repartidor | Nombre / Teléfono del cliente | Dirección, referencia y pin van siempre; el teléfono va apagado por defecto. | nombre sí, teléfono no |
+
+`hub.orderFlow` lo lee orders vía `notification-config` con caché de **60 s**: encender o
+apagar la confirmación tarda hasta un minuto en aplicar a pedidos nuevos.
+
+**Repartidores:** Usuarios → Nuevo usuario → rol **Repartidor** (email, contraseña y
+teléfono opcional). Entran en **`/hub-driver`** con el mismo login del hub
+(`{slug}.ordena.app/hub-admin/login` o `ordena.app/hub-admin/login`); cada rol se
+redirige solo a su app. La app muestra Disponibles (bolsa), Mis pedidos y Entregados, se
+refresca sola cada 15 s y abre Google Maps / Waze en el pin exacto del cliente. No usa
+WhatsApp ni plantillas de Meta. Conviene que el repartidor la agregue a la pantalla de
+inicio del celular.
+
+**Máquina de estados** (`order.delivery_assignment.status`): `none → published →
+assigned → picked_up → on_the_way → delivered`, con `incident` como marca lateral (se
+retoma con el siguiente estado) y `cancelled` al rechazar. La toma desde la bolsa es un
+`findOneAndUpdate` condicionado a `published`: el segundo repartidor recibe 409
+`already_taken`. El hub puede asignar a mano, reasignar, quitar y republicar, o marcar
+recogido / en camino / entregado él mismo. `order_status` se espeja (`Recogido`,
+`En camino`, `Entregado`) para que ticket, negocio y cliente sigan viendo el avance.
+Cada cambio queda en `delivery_assignment.history` (base de los informes y de la
+liquidación de repartidores del Sprint 5).
+
+**El negocio** (portal) solo maneja *En preparación* y *Listo para recoger*; ve
+“Repartidor: nombre · estado” pero no la auditoría, y nunca ve pedidos por confirmar.
+
+**El botón “Notificar a repartidor” por WhatsApp** (plantilla `pedido_repartidor_es`)
+sigue disponible como opción secundaria en el drawer solo si el hub tiene ese número en
+Contacto → “WhatsApp del repartidor”; con la bolsa ya no hace falta.
+
+## 4f. Liquidación de repartidores (Sprint 5)
+
+Reemplaza el Excel del courier y sirve a cualquier hub que pague a motorizados. Sin
+variables nuevas ni migraciones: un hub sin `driverPayConfig` se comporta como comisión
+**fija 0** (sin comisión) con corte **diario**, y el único cambio de datos es un índice
+nuevo en orders (`delivery_assignment.driver_id` + `delivered_at`) que mongoose crea al
+arrancar. Orden de deploy: **orders → hubs → frontend**.
+
+**Dónde se configura:** hub-admin → **Liquidaciones** → pestaña **Repartidores** (el
+segmented "Negocios | Repartidores" de arriba de la página). Tarjeta de configuración
+plegable:
+
+| Campo | Opciones | Default |
+|---|---|---|
+| Tipo de comisión | **Monto fijo por entrega** · **% del envío o del total** · **Sin comisión** | fijo |
+| Valor | monto por entrega (fijo) o porcentaje (%), ≥ 0 | 0 |
+| Base del % (solo con %) | **del costo de envío** (`delivery_cost`) · **del total del pedido** (`order_total`) | costo de envío |
+| Frecuencia de corte | diaria · semanal (lunes–domingo) · quincenal · mensual — mismas claves y zona horaria que §4d | diaria |
+| Excepciones por repartidor | repartidor + tipo/valor/base propios; manda sobre la regla general | ninguna |
+
+Se guarda en `hub.driverPayConfig` y `hub.driverCommissionOverrides` (`PUT /hubs/me`, solo
+HUB_OWNER/HUB_ADMIN; HUB_STAFF no lo edita). Cambiar la regla no recalcula nada por sí
+sola: aplica la próxima vez que pulses **Calcular** (las Pendientes se regeneran con la
+regla vigente; las Pagadas no cambian).
+
+**Qué registra el repartidor al entregar (`/hub-driver`):** al pulsar **"Entregado al
+cliente"** en un pedido que NO está pagado, la app pregunta **"¿Cómo te pagó el
+cliente?"** con tres botones: **En efectivo** (`cash`), **Transferencia / billetera**
+(`wallet`) o **No cobré** (`none`, "lo cobra el negocio o el hub"). Si cobró, el pedido
+queda **Pagado** (`payment_status = Paid`: el dinero que recibió el repartidor ES el pago)
+y se guarda `order.delivery_assignment.collection { collected_by_driver, method, amount,
+at }` con el total del pedido como monto. Si el pedido ya estaba pagado (tarjeta,
+comprobante…) no pregunta nada y registra "sin cobro". La tarjeta de Entregados muestra
+"Cobraste {monto} en efectivo" / "Sin cobro". El hub puede **corregir el cobro** desde el
+drawer del pedido → sección Repartidor ("Cobró {monto} (efectivo|billetera)" / "No cobró
+(lo cobra el negocio/hub)", botones "Marcó cobro en efectivo" / "No cobró"); pasar a "no
+cobró" NO revierte el estado de pago del pedido (se cambia aparte si hace falta). Todo
+queda en `delivery_assignment.history`.
+
+**Cómo se calcula (botón "Calcular liquidaciones" del período elegido):** hubs pide a
+orders las entregas de cada repartidor cuyo `delivered_at` cae en el período (en la TZ
+del hub) y guarda una liquidación por repartidor y período (colección
+`hub_driver_settlements`, única por `{hubId, driverId, period}`):
+
+- **Comisión por línea:** fijo → el monto por entrega; % → base (envío o total) × valor
+  / 100; sin comisión → 0. Se aplica la excepción del repartidor si existe, si no la regla
+  general. Todo a 2 decimales.
+- **Ajustes:** bonos (monto **positivo**, a favor del repartidor) y descuentos (monto
+  **negativo**), con concepto, quién lo agregó y cuándo. Se agregan/quitan desde el drawer
+  mientras la liquidación está Pendiente (el toggle Bono/Descuento fija el signo).
+- **`driverEarnings` = comisión + ajustes** → lo que gana el repartidor.
+- **`netToHub` = cobrado − `driverEarnings`** → **positivo:** el repartidor le entrega ese
+  dinero al hub ("Entrega al hub {monto}", ámbar); **negativo:** el hub le paga al
+  repartidor ("El hub le paga {monto}", esmeralda); 0: "Al día".
+- **Pagadas no se recalculan:** Calcular salta las que ya están Pagadas (`skippedPaid`) y
+  regenera solo las Pendientes. **Los ajustes sobreviven al recálculo:** se conservan los
+  de la liquidación Pendiente y se recalculan los totales.
+- **Marcar pagada** (referencia opcional) la congela con fecha y quién la marcó; repetirlo
+  no hace nada (idempotente).
+- **Descargar CSV:** una fila por entrega, una fila por ajuste y los totales, con BOM
+  para que Excel lo abra bien (igual que el CSV de negocios).
+
+| Campo de la liquidación | Qué es |
+|---|---|
+| `period` · `frequency` · `periodStart` · `periodEnd` | Clave del corte (`YYYY-MM-DD`, `YYYY-Www`, `YYYY-MM-Q1` / `YYYY-MM-Q2`, `YYYY-MM`) y su rango en la TZ del hub |
+| `driverId` · `driverName` · `driverEmail` | El repartidor (usuario del hub con rol Repartidor) |
+| `deliveriesCount` | Entregas del repartidor en el período (`delivery_assignment.status = delivered`) |
+| `collectedTotal` | Lo que cobró el repartidor (efectivo + billetera) |
+| `deliveryFeesTotal` · `orderTotalsTotal` | Suma de costos de envío y de totales de los pedidos entregados |
+| `commissionType` · `commissionValue` · `percentBase` | Regla aplicada (la resuelta para ese repartidor al calcular) |
+| `commissionAmount` | Suma de la comisión de cada línea |
+| `adjustments[]` · `adjustmentsTotal` | Bonos (+) y descuentos (−): concepto, monto, autor, fecha |
+| `driverEarnings` | `commissionAmount + adjustmentsTotal` |
+| `netToHub` | `collectedTotal − driverEarnings` (> 0 entrega al hub · < 0 el hub le paga) |
+| `lines[]` · `linesTruncated` | Una por pedido: #, negocio, entregado, total, envío, km, tipo de pago, cobró (método/monto), comisión. Sin datos del cliente; tope 5000 |
+| `status` · `paidAt` · `paidReference` · `paidBy` | `PENDING` o `PAID`, con fecha, referencia y quién la marcó |
+| `currency` | La del hub |
+
+**Ejemplo:** regla "fijo 2.00 por entrega". En el día el repartidor hizo **10 entregas** y
+cobró **180.00 en efectivo**; el hub le agregó un **bono de 5.00**. Comisión = 10 × 2.00 =
+20.00 · `driverEarnings` = 20.00 + 5.00 = **25.00** · `netToHub` = 180.00 − 25.00 =
+**155.00** → el repartidor **entrega 155.00 al hub** y se queda con 25.00. Si solo hubiera
+cobrado 10.00, `netToHub` = −15.00 → **el hub le paga 15.00**.
+
+**Qué ve el repartidor (`/hub-driver` → pestaña "Mi cuenta"; se carga al entrar y con
+Actualizar, sin polling):** tarjeta **Hoy** (entregas, cobrado, tu comisión y la línea
+clave: "Debes entregar al hub {monto}" en ámbar / "El hub te debe {monto}" en esmeralda /
+"Al día"), tarjeta **Período actual** (el corte en curso según la frecuencia del hub, con
+los mismos números), su regla en palabras ("Ganas 2.00 por entrega" / "Ganas 10% del
+envío" / "Sin comisión configurada") y sus últimas 12 **liquidaciones** (período,
+Pendiente/Pagada con referencia, entregas, cobrado, comisión ± ajustes, neto con el mismo
+lenguaje); al tocar una se abre el detalle con sus líneas y ajustes. Solo ve las suyas
+(`GET /api/hubs/me/driver/account`; el detalle exige `driverId === userId`).
+
+**Para depurar:** hubs (`/api/hubs`, roles HUB_OWNER/HUB_ADMIN salvo que se indique):
+`POST /me/driver-settlements/generate { period, driverId? }`, `GET /me/driver-settlements`,
+`GET /me/driver-settlements/:id` (también el repartidor dueño), `PATCH …/:id/paid`,
+`POST` / `DELETE …/:id/adjustments` (409 si ya está Pagada), `PATCH
+/me/orders/:orderId/collection` (también HUB_STAFF) y `GET /me/driver/account`
+(Repartidor). orders: `GET /internal/hub/:hubId/driver-settlement-lines?driverId=&from=&to=`
+con `x-ordena-secret`, y la acción `set_collection` del flow.
+
+---
+
 ## 5. Stripe (paso a paso)
 
 > Hazlo primero completo en **modo Test**; repite en Live cuando el smoke pase.
@@ -293,14 +480,14 @@ suscripción manual desde Stripe con `metadata.hubId`.
 
 ---
 
-## 6. Meta — 4 plantillas de WhatsApp
+## 6. Meta — 5 plantillas de WhatsApp
 
 **Antes de empezar:** despliega orders con el fix `90f4e5c` (§3). Con él, las
-4 plantillas usan la MISMA base de botón: **`https://ordena.app/{{1}}`**.
+Las 5 plantillas usan la MISMA base de botón: **`https://ordena.app/{{1}}`**.
 
 Dónde: **Meta Business Suite → WhatsApp Manager → Message templates → Create**,
 en la misma WABA donde ya viven `primer_pedido_es` / `limite_pedidos_es`.
-Las 4 son: **categoría Utility · idioma Español (es)** · sin header ni footer ·
+Las 5 son: **categoría Utility · idioma Español (es)** · sin header ni footer ·
 un botón de tipo **URL dinámica**. Meta pide un valor de ejemplo por variable —
 usa los de las tablas. Los nombres deben ser EXACTOS (si cambias alguno, setea
 la env `TEMPLATE_*` correspondiente en orders).
@@ -401,6 +588,7 @@ grep -n -B6 -A10 "1320" ~/.pm2/logs/Ordena-BOT-error.log | tail -80
 | `number of ... params does not match` (#132000) | Conteo de variables del body distinto al de la tabla del §6 | Corregir la plantilla en Meta |
 | Botón con `%7B%7B1%7D%7D` en la URL | Se escribieron las llaves a mano; Meta las guardó como texto | Insertar la variable con el chip `{{1}}` (debe leerse 24/2000) |
 | `template name does not exist` (#132001) | Nombre o idioma distinto (`es_MX` en vez de `es`) | Renombrar o setear la env `TEMPLATE_*` |
+| *(sin error de Meta)* el mensaje al cliente (`pedido_confirmado_cliente_es`, §6.6) no llega | Toggle apagado, teléfono con menos de 8 dígitos, pedido aún por confirmar, `CUSTOMER_NOTIFY_DISABLED=true`, o el bot falló | Revisar `customer_notified_at` en el pedido: si quedó `null`, el bot falló (o nunca se intentó) y se reintenta en la próxima confirmación; si tiene fecha, ya se envió (a `customer_notified_to`; buscar en `whatsapp_log` el `dedupeKey` `{orderId}:cliente`). Revisar el toggle correspondiente: hub → Ajustes → Flujo del pedido; SaaS/WL → Ajustes → WhatsApp (nace apagado) |
 
 Para verificar cómo quedó una plantilla de verdad (no la UI), desde la
 carpeta del bot con sus envs cargadas:
@@ -414,6 +602,106 @@ Debe decir `APPROVED`, `es`, `POSITIONAL` y botón `https://ordena.app/{{1}}`.
 **Tras la aprobación:** nada que configurar — los nombres coinciden con los
 defaults del código. El anti-duplicado ya está en dos capas (dedupeKey del bot
 + claim mensual en hubs para el aviso de 80%).
+
+---
+
+### 6.6 `pedido_confirmado_cliente_es` (aviso al cliente — Sprint 4)
+Se envía **UNA vez por pedido**, cuando el pedido pasa a **confirmado**. Es el único
+mensaje que recibe el cliente final; como no ha escrito al número del bot, no cabe
+mensaje libre: tiene que ser plantilla. Una sola plantilla sirve para hubs, SaaS y White
+Label, y la firma el mismo número del bot que envía las otras cuatro. En Meta solo hay que
+crearla y esperar la aprobación; el código ya está listo y calza con este texto.
+
+- **Nombre:** `pedido_confirmado_cliente_es` · **Categoría:** Utilidad · **Idioma:** Español (`es`)
+- **Env opcional en orders:** `TEMPLATE_CUSTOMER_CONFIRMED_ES` (default `pedido_confirmado_cliente_es`;
+  solo si en Meta la nombras distinto, §2).
+- **Kill switch:** `CUSTOMER_NOTIFY_DISABLED=true` en el .env de orders (y reiniciar orders)
+  apaga el aviso en TODOS los contextos (hubs, SaaS y WL) sin tocar ningún toggle.
+
+**Body** (5 variables posicionales, pegar literal):
+```
+✅ ¡Hola {{1}}! Tu pedido #{{2}} en {{3}} está confirmado.
+
+Tiempo estimado: {{4}}.
+{{5}}
+
+Puedes seguir tu pedido en el enlace.
+```
+**Botón:** URL dinámica (índice 0) · texto `Ver mi pedido` · URL `https://ordena.app/{{1}}`
+(sufijo real: `{store_link}/ordenes/{orderId}`, igual que `pedido_repartidor_es`).
+**Ejemplos:** 1 `María` · 2 `1042` · 3 `Cafe Cena Fonseca` · 4 `35 a 40 minutos` ·
+5 `Te lo llevamos a la dirección indicada. Ten listo el pago de 45.00 (efectivo).`
+**Destinatario:** `order.customer_number` reducido a solo dígitos (se quitan `+`, espacios y
+guiones). Si quedan **menos de 8 dígitos no se envía** (el pedido queda con
+`customer_notified_at` en `null`).
+
+**Qué manda orders en cada variable** (ningún parámetro va vacío ni con saltos de línea —
+el bot además normaliza espacios/saltos con `toValidText`):
+
+| # | Variable | Regla | Ejemplo |
+|---|---|---|---|
+| 1 | Primer nombre del cliente | primera palabra de `order.customer_name`, recortada a 40 caracteres; sin nombre → `👋` | `María` |
+| 2 | Número de pedido | `order.orderNumber`; si no existe, últimos 6 del `_id` en mayúsculas | `1042` (o `A1B2C3`) |
+| 3 | Nombre del negocio | `businesses.name` | `Cafe Cena Fonseca` |
+| 4 | Tiempo estimado del **negocio** | `businesses.delivery_options.estimated_delivery_minutes {min,max}`: min y max válidos (>0) → `35 a 40 minutos`; solo max o solo min → `40 minutos`; ninguno → `lo antes posible` | `35 a 40 minutos` |
+| 5 | Línea de cierre según método y pago | una de las 4 variantes de la tabla siguiente | ver abajo |
+
+**Variantes de {{5}}.** *Método:* es **pickup** si `delivery_method` (en minúsculas) es o
+contiene uno de `self pick-up`, `self pickup`, `pickup`, `en tienda`, `in store`,
+`recoger en local`; si no, **delivery**. *Pagado:* si `payment_status` (en minúsculas) es
+uno de `paid`, `pagado`, `approved`, `aprobado`, `completed`. `{total}` =
+`order.total_amount` (o `order.order_total`); `{método de pago}` = `order.payment_type`
+→ `order.payment.payment_method` → `efectivo`.
+
+| Método | Pago | Texto de {{5}} |
+|---|---|---|
+| delivery | no pagado | `Te lo llevamos a la dirección indicada. Ten listo el pago de {total} ({método de pago}).` |
+| delivery | pagado | `Te lo llevamos a la dirección indicada. Tu pago ya está registrado.` |
+| pickup | no pagado | `Pásalo a recoger al local en el tiempo indicado. Pagas {total} ({método de pago}) al recibirlo.` |
+| pickup | pagado | `Pásalo a recoger al local en el tiempo indicado. Tu pago ya está registrado.` |
+
+**Cuándo se dispara** (siempre al pasar a confirmado, nunca antes):
+
+| Contexto | Disparo |
+|---|---|
+| Hub con “El hub confirma los pedidos” encendido | Cuando el hub **confirma** el pedido desde hub-admin (acción `confirm` del flujo del §4e). |
+| Hub sin confirmación y portal del negocio | Cuando el estado del pedido pasa a `Confirmado`/`Confirmed` por el PATCH interno de estado. |
+| SaaS / White Label | Cuando el negocio marca `Confirmed` desde su dashboard (`PATCH /orders/:id`, `changeOrderValues`) o cuando el pago con tarjeta deja el pedido en `Confirmed` (`markOrderPaidInternal`). |
+
+Nunca se envía mientras el pedido está pendiente de confirmación del hub
+(`order.hub_confirmation.status === 'pending'`).
+
+**Interruptores:**
+
+| Dónde | Interruptor | Default |
+|---|---|---|
+| Hub → **Ajustes → Flujo del pedido** | “Avisar al cliente por WhatsApp al confirmar” (`hub.orderFlow.notifyCustomerOnConfirm`; llega a orders vía `notification-config`, caché de 60 s como el resto del `orderFlow`) | **encendido** |
+| SaaS / WL → dashboard → **Ajustes → WhatsApp** | “Aviso al cliente al confirmar el pedido” (`business_settings.whatsapp.templatesByCategory.customer_confirmed.enabled`) | **apagado** (opt-in: cuesta un mensaje de Meta por pedido) |
+| Global (env de orders) | `CUSTOMER_NOTIFY_DISABLED=true` | no puesta |
+
+**Envío único por pedido** (mismo patrón que `delivery_notified_at` del aviso al repartidor):
+antes de llamar al bot, orders reserva el candado con un CAS
+`findOneAndUpdate({ _id, customer_notified_at: null }, { $set: { customer_notified_at, customer_notified_to } })`;
+si el bot falla, el candado vuelve a `null` y se reintenta en la próxima confirmación /
+cambio de estado. Segunda red: `dedupeKey` `{orderId}:cliente` en el bot (`whatsapp_log`).
+Un pedido con `customer_notified_at` con fecha ya no vuelve a avisar aunque se reconfirme.
+
+**Cómo cargarla en Meta Business (paso a paso):**
+
+| Paso | Dónde | Qué hacer |
+|---|---|---|
+| 1 | Meta Business Suite → WhatsApp Manager → **Plantillas de mensajes** (misma WABA de `primer_pedido_es`) | **Crear plantilla** |
+| 2 | Categoría | **Utilidad** (no Marketing) |
+| 3 | Nombre | `pedido_confirmado_cliente_es` — exacto, en minúsculas |
+| 4 | Idioma | **Español** (`es`; NO `es_MX` ni `es_ES`) |
+| 5 | Encabezado y pie de página | ninguno |
+| 6 | Cuerpo | pegar el body de arriba **literal** (5 variables, con los saltos de línea tal cual). Insertar cada variable con el chip `{{1}}`…`{{5}}`, no escribiendo las llaves a mano |
+| 7 | Botones | Añadir botón → **Visitar sitio web** → tipo de URL **Dinámica** → texto `Ver mi pedido` → URL `https://ordena.app/{{1}}` → ejemplo del sufijo: `cafe-cena-fonseca--ab12cd/ordenes/68f0a1b2c3d4e5f6a7b8c9d0` |
+| 8 | Ejemplos de variables (Meta los pide) | 1 `María` · 2 `1042` · 3 `Cafe Cena Fonseca` · 4 `35 a 40 minutos` · 5 `Te lo llevamos a la dirección indicada. Ten listo el pago de 45.00 (efectivo).` |
+| 9 | Enviar | **Enviar para revisión**. Al aprobarse, verificar con el curl del §6.5 (`name=pedido_confirmado_cliente_es`): debe decir `APPROVED`, `es`, `POSITIONAL` y botón `https://ordena.app/{{1}}` |
+
+Tras la aprobación no hay nada que configurar: el nombre coincide con el default del
+código. Si la nombraste distinto, `TEMPLATE_CUSTOMER_CONFIRMED_ES=<nombre>` en orders (§2).
 
 ---
 
@@ -532,6 +820,57 @@ staging a producción (en orden):
 10. ☐ Alta de Oe Ya con la sub manual del §5.3.
 11. ☐ `ORS_API_KEY` (regenerada) en business de prod (§2) + correr los dos
     scripts del §4b contra la DB de prod + smoke del punto 14 del §8.
+12. ☐ Tras deployar orders: `backfillOrderNumbers` del §4c contra la DB de prod
+    (primero con `DRY_RUN=1`). Verificar que un pedido viejo muestre el mismo `#N`
+    en dashboard del negocio, hub-admin y ticket.
+13. ☐ Confirmar que `HUB_SELF_SERVE_SIGNUP` NO está en el .env de hubs de prod y que
+    `/hub-admin/login` ya no ofrece "Crear mi hub".
+14. ☐ Sprint 1.5: tras deployar business + hubs + frontend, entrar a **Ajustes del hub →
+    Guardar cambios** una vez (propaga "Efectivo contra entrega" a `payment_methods.cash`
+    de los negocios existentes; los nuevos ya nacen con él). Verificar en el checkout de un
+    negocio del hub que la pantalla de pago ofrece efectivo y que el carrito llega lleno al
+    checkout entrando por el directorio del hub.
+15. ☐ Crear en Meta la plantilla del §6.6 (aviso al cliente) para que esté aprobada al
+    llegar al Sprint 4.
+17. ☐ Sprint 3 (flujo + bolsa): deployar **orders → hubs → frontend** (sin envs ni
+    migraciones, §4e). En el hub: Usuarios → crear un repartidor; Ajustes → “Flujo del
+    pedido” (encender la confirmación solo si el hub lo quiere) y “Qué ve el repartidor”
+    → Guardar. Smoke: hacer un pedido de delivery → (si confirma) aparece el banner “N
+    pedidos esperan tu confirmación” y el portal del negocio NO lo lista → Confirmar con
+    “Publicar” marcado → en el celular, `/hub-driver` lo muestra en Disponibles → Tomar
+    pedido (desde un segundo repartidor debe salir “Otro repartidor ya tomó este pedido”)
+    → Recogí / En camino / Entregado → el drawer del hub y el portal muestran repartidor
+    y tiempos; `order_status` termina en `Entregado`.
+16. ☐ Sprint 2 (comprobante de pago): deployar **products** (nuevo endpoint interno de
+    subida), **orders** (correr `npm install`: nueva dependencia `multer`), gateway,
+    business, hubs y frontend. `PRODUCTS_SERVICE_LINK` en orders es opcional (por
+    defecto `http://localhost:3004/api`, que es donde corre products en cada host);
+    products y orders ya comparten `INTERNAL_HUBS_SECRET`. Luego, en el hub: Ajustes →
+    “Pagos con comprobante” → Guardar una vez (propaga a los negocios existentes; los
+    nuevos nacen con la config). Smoke: pagar un pedido con Yape en un negocio del hub,
+    adjuntar una captura, y verla en el drawer del hub, en el portal del negocio, en el
+    detalle del dashboard y en el ticket.
+18. ☐ Sprint 4 (aviso al cliente): deployar **orders → hubs → business → frontend** (sin
+    migraciones; envs opcionales del §6.6). Confirmar que `pedido_confirmado_cliente_es`
+    está **APPROVED** en Meta (curl del §6.5). En el hub: Ajustes → “Flujo del pedido” →
+    verificar que “Avisar al cliente por WhatsApp al confirmar” está encendido (viene así
+    por defecto) → Guardar. Smoke: hacer un pedido en un negocio del hub poniendo **tu
+    propio número** como cliente → confirmar el pedido (o pasarlo a Confirmado si el hub
+    no confirma) → te llega el mensaje con el **tiempo estimado del negocio** y la línea
+    de pago correcta → un segundo intento de confirmación / cambio de estado **no
+    duplica** el mensaje (`customer_notified_at` ya tiene fecha). En SaaS/WL el toggle
+    nace apagado (Ajustes → WhatsApp): encenderlo solo en los negocios que lo pidan.
+19. ☐ Sprint 5 (liquidación de repartidores): deployar **orders → hubs → frontend** (sin
+    envs ni migraciones; el índice nuevo de orders lo crea mongoose al arrancar, §4f). En el
+    hub: **Liquidaciones → pestaña Repartidores** → configurar la regla (tipo, valor, base
+    del %, frecuencia y excepciones) → **Guardar**. Smoke: un repartidor entrega desde
+    `/hub-driver` un pedido de efectivo marcando **"En efectivo"** → el pedido queda
+    **Pagado** y el drawer del hub muestra "Cobró {monto} (efectivo)" → **Calcular
+    liquidaciones** del día → aparece la fila del repartidor con cobrado / comisión / neto
+    ("Entrega al hub …") → agregar un bono desde el drawer, **Marcar pagada** con
+    referencia y **Descargar CSV** (una fila por entrega + el ajuste + totales) → en
+    `/hub-driver` → **Mi cuenta** el repartidor ve Hoy, el período actual y la liquidación
+    Pagada con su referencia.
 
 ---
 

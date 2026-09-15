@@ -37,6 +37,20 @@ function stripOrderPII(
     // nunca debe verlo, sin importar la matriz de privacidad.
     clean.delivery_notified_to = null;
 
+    // Del flujo de entrega el negocio ve el avance y quién lo lleva, no la
+    // auditoría interna del hub (quién publicó/asignó/reasignó y por qué).
+    const assignment = order.delivery_assignment as Record<string, unknown> | undefined;
+    if (assignment) {
+        clean.delivery_assignment = {
+            status: assignment.status || "none",
+            driver_name: assignment.driver_name || null,
+            assigned_at: assignment.assigned_at || null,
+            picked_up_at: assignment.picked_up_at || null,
+            on_the_way_at: assignment.on_the_way_at || null,
+            delivered_at: assignment.delivered_at || null,
+        };
+    }
+
     const shipTo = { ...(order.ship_to as Record<string, unknown> | undefined) };
     const payment = { ...(order.payment as Record<string, unknown> | undefined) };
 
@@ -107,6 +121,14 @@ export async function getMyHubOrders(req: Request, res: Response): Promise<Respo
             status: typeof req.query.status === "string" ? req.query.status : undefined,
             from: typeof req.query.from === "string" ? req.query.from : undefined,
             to: typeof req.query.to === "string" ? req.query.to : undefined,
+            // Búsqueda por número visible o ID del pedido.
+            q: typeof req.query.q === "string" && req.query.q.trim() ? req.query.q.trim() : undefined,
+            // Sprint 3: filtros del flujo (solo roles de hub) y candado del portal:
+            // el negocio nunca ve pedidos que el hub aún no confirmó.
+            ...(ctx.role !== "BUSINESS_VIEWER" && typeof req.query.confirmation === "string" ? { confirmation: req.query.confirmation } : {}),
+            ...(ctx.role !== "BUSINESS_VIEWER" && typeof req.query.assignment === "string" ? { assignment: req.query.assignment } : {}),
+            ...(ctx.role !== "BUSINESS_VIEWER" && typeof req.query.driverId === "string" ? { driverId: req.query.driverId } : {}),
+            ...(ctx.role === "BUSINESS_VIEWER" ? { excludePendingConfirmation: "1" as const } : {}),
         });
 
         // El Portal Business solo recibe los datos del cliente que el hub decide
@@ -188,8 +210,9 @@ export async function getMyBusinessPortalSummary(req: Request, res: Response): P
 
         const from = typeof req.query.from === "string" ? req.query.from : undefined;
         const to = typeof req.query.to === "string" ? req.query.to : undefined;
-        const summaryResp = await getHubOrdersSummary(ctx.hubId, from, to, businessId);
+        const summaryResp = await getHubOrdersSummary(ctx.hubId, from, to, businessId, ctx.role === "BUSINESS_VIEWER");
         const summary = summaryResp?.data || { totalOrders: 0, totalSales: 0, byStatus: [], topProducts: [] };
+        const hubDoc: any = await hubModel.findById(ctx.hubId).select("fulfillment").lean();
 
         return res.status(200).json({
             status: true,
@@ -200,8 +223,13 @@ export async function getMyBusinessPortalSummary(req: Request, res: Response): P
                     _id: business._id,
                     name: business.name,
                     hubSlug: business.hubSlug,
+                    // Slug público real ({hubSlug}--{sufijo}): el portal arma con él el link al ticket térmico.
+                    store_link: business.store_link,
                     image_url: business.image_url,
                     operationalStatus: business.operationalStatus || "active",
+                    estimated_delivery_minutes: business.delivery_options?.estimated_delivery_minutes ?? null,
+                    // El hub decide si cada negocio edita su tiempo estimado desde el portal.
+                    canEditEta: hubDoc?.fulfillment?.businessesEditEta === true,
                 },
                 summary,
             },

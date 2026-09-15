@@ -19,6 +19,7 @@ exports.getMyHubBusinessDetail = getMyHubBusinessDetail;
 exports.updateMyHubBusinessInfo = updateMyHubBusinessInfo;
 exports.uploadMyHubBusinessLogo = uploadMyHubBusinessLogo;
 exports.updateMyHubBusinessHours = updateMyHubBusinessHours;
+exports.updateMyPortalBusinessEta = updateMyPortalBusinessEta;
 const hubModel_1 = __importDefault(require("../models/hubModel"));
 const businessService_external_1 = require("../services/businessService.external");
 // Traduce fallos del upstream (business-service) a respuestas claras.
@@ -131,7 +132,9 @@ function createBusinessForMyHub(req, res) {
                 : {})), { 
                 // Métodos de entrega del hub: el checkout nace ofreciendo lo que el
                 // operador decidió (default: delivery + recogida, tarifa 0).
-                fulfillment: (0, businessService_external_1.buildHubFulfillmentPayload)(hub.fulfillment) }));
+                fulfillment: (0, businessService_external_1.buildHubFulfillmentPayload)(hub.fulfillment), 
+                // Comprobante de pago y destinatario del aviso según el hub.
+                payment_flow: (0, businessService_external_1.buildHubPaymentFlowPayload)(hub) }));
             yield hubModel_1.default.updateOne({ _id: ctx.hubId }, { $inc: { "usageMetrics.businessesCount": 1 }, $set: { updated_at: new Date() } });
             return res.status(201).json({
                 status: true,
@@ -207,7 +210,7 @@ function updateBusinessOperationalStatus(req, res) {
  */
 function getMyHubBusinessDetail(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e;
+        var _a, _b, _c, _d, _e, _f, _g;
         const ctx = req.hubContext;
         try {
             const businessId = String(req.params.businessId);
@@ -239,6 +242,8 @@ function getMyHubBusinessDetail(req, res) {
                         // Pin del negocio (delivery por distancia del hub): sin él el dashboard
                         // no podría hidratarlo y lo borraría al guardar la información.
                         location: (_e = business.location) !== null && _e !== void 0 ? _e : null,
+                        // Tiempo estimado de entrega (min–max minutos) para el aviso al cliente.
+                        estimated_delivery_minutes: (_g = (_f = business.delivery_options) === null || _f === void 0 ? void 0 : _f.estimated_delivery_minutes) !== null && _g !== void 0 ? _g : null,
                         operationalStatus: business.operationalStatus || "active",
                     },
                     businessHours,
@@ -255,7 +260,7 @@ const BUSINESS_INFO_FIELDS = ["name", "description", "phone", "address"];
 /** PATCH /api/hubs/me/businesses/:businessId — info básica (vía patch interno). */
 function updateMyHubBusinessInfo(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a;
+        var _a, _b, _c;
         const ctx = req.hubContext;
         try {
             const businessId = String(req.params.businessId);
@@ -280,6 +285,12 @@ function updateMyHubBusinessInfo(req, res) {
                     };
                 }
             }
+            // Tiempo estimado de entrega (min–max minutos). null limpia; business lo sanea.
+            if (Object.prototype.hasOwnProperty.call(req.body || {}, "estimated_delivery_minutes")) {
+                const eta = req.body.estimated_delivery_minutes;
+                patch.estimated_delivery_minutes =
+                    eta === null || eta === undefined ? null : { min: (_a = eta === null || eta === void 0 ? void 0 : eta.min) !== null && _a !== void 0 ? _a : null, max: (_b = eta === null || eta === void 0 ? void 0 : eta.max) !== null && _b !== void 0 ? _b : null };
+            }
             if (Object.keys(patch).length === 0) {
                 return res.status(400).json({
                     status: false,
@@ -293,7 +304,7 @@ function updateMyHubBusinessInfo(req, res) {
                 status: true,
                 statusCode: 200,
                 message: "Negocio actualizado",
-                data: (_a = updated === null || updated === void 0 ? void 0 : updated.data) !== null && _a !== void 0 ? _a : updated,
+                data: (_c = updated === null || updated === void 0 ? void 0 : updated.data) !== null && _c !== void 0 ? _c : updated,
             });
         }
         catch (error) {
@@ -348,6 +359,41 @@ function updateMyHubBusinessHours(req, res) {
                 return res.status(st).json(error.response.data);
             }
             return upstreamError(res, error, "guardar el horario");
+        }
+    });
+}
+/**
+ * PATCH /api/hubs/me/portal/business/eta  (BUSINESS_VIEWER)
+ * El negocio fija su tiempo estimado de entrega SOLO si el hub lo permite
+ * (fulfillment.businessesEditEta). Body: { estimated_delivery_minutes: {min,max} | null }.
+ */
+function updateMyPortalBusinessEta(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c, _d;
+        const ctx = req.hubContext;
+        try {
+            const businessId = String(ctx.businessId || "");
+            if (!businessId) {
+                return res.status(403).json({ status: false, statusCode: 403, message: "Sesión sin negocio", data: {} });
+            }
+            const hub = yield hubModel_1.default.findById(ctx.hubId).select("fulfillment").lean();
+            if (((_a = hub === null || hub === void 0 ? void 0 : hub.fulfillment) === null || _a === void 0 ? void 0 : _a.businessesEditEta) !== true) {
+                return res.status(403).json({
+                    status: false,
+                    statusCode: 403,
+                    message: "El tiempo estimado de tu negocio lo define el hub",
+                    data: {},
+                });
+            }
+            yield (0, businessService_external_1.assertBusinessBelongsToHub)(ctx.hubId, businessId);
+            const eta = (req.body || {}).estimated_delivery_minutes;
+            const updated = yield (0, businessService_external_1.patchBusinessInternal)(businessId, {
+                estimated_delivery_minutes: eta === null || eta === undefined ? null : { min: (_b = eta === null || eta === void 0 ? void 0 : eta.min) !== null && _b !== void 0 ? _b : null, max: (_c = eta === null || eta === void 0 ? void 0 : eta.max) !== null && _c !== void 0 ? _c : null },
+            });
+            return res.status(200).json({ status: true, statusCode: 200, message: "Tiempo estimado guardado", data: { business: (_d = updated === null || updated === void 0 ? void 0 : updated.data) !== null && _d !== void 0 ? _d : updated } });
+        }
+        catch (error) {
+            return upstreamError(res, error, "guardar el tiempo estimado");
         }
     });
 }
